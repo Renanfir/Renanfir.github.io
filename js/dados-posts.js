@@ -16,10 +16,10 @@ window.CONFIGURACAO_BLOG = {
   navegacao: [
     { rotulo: "Home", href: "index.html" }
   ],
-  
+
   links: [
     { rotulo: "GitHub", href: "https://github.com/Renanfir" },
-    { rotulo: "LinkedIn", href: "www.linkedin.com/in/renan-fiamoncini-rother" }
+    { rotulo: "LinkedIn", href: "https://www.linkedin.com/in/renan-fiamoncini-rother/" }
   ]
 };
 
