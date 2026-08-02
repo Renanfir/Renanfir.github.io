@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<!--
+  ============================================================================
+  MODELO DE POST - copie para posts/<seu-slug>.html
+
+  1. Renomeie o arquivo (o nome do arquivo e o slug)
+  2. Troque o data-slug do <body> pelo mesmo slug
+  3. Adicione slug, titulo, data e secao em js/dados-posts.js
+  4. Escreva o texto dentro do <article>
+  ============================================================================
+-->
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Carregando...</title>
+  <link rel="stylesheet" href="../css/estilos.css">
+</head>
+<body data-raiz="../" data-slug="SUBSTITUA-PELO-SLUG">
+
+  <div class="layout">
+
+    <blog-barra-lateral></blog-barra-lateral>
+
+    <div class="conteudo">
+      <article class="painel">
+        <blog-post-cabecalho></blog-post-cabecalho>
+
+        <p>Paragrafo de abertura.</p>
+
+        <h2>Subtitulo</h2>
+        <p>Texto da secao.</p>
+
+        <ul>
+          <li>Item de lista</li>
+          <li>Outro item</li>
+        </ul>
+
+        <blockquote>Citacao de destaque.</blockquote>
+
+        <pre><code>console.log("bloco de codigo");</code></pre>
+
+        <hr>
+        <p class="post__voltar"><a href="../index.html">Voltar para a lista</a></p>
+      </article>
+    </div>
+  </div>
+
+  <script src="../js/dados-posts.js"></script>
+  <script src="../js/componentes.js"></script>
+</body>
+</html>

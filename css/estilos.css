@@ -1,0 +1,253 @@
+/* ==========================================================================
+   BLOG - ESTILOS
+   Layout simples: barra lateral fixa + paineis de conteudo sobre fundo gradiente.
+   Para trocar a identidade visual, altere apenas o bloco :root.
+   ========================================================================== */
+
+:root {
+  --cor-fundo-inicio: #1f7f92;
+  --cor-fundo-fim: #16544f;
+  --cor-painel: #2f2926;
+  --cor-borda: #443b36;
+  --cor-texto: #ebe8e4;
+  --cor-texto-suave: #a89f97;
+  --cor-link: #b9a7e8;
+  --cor-link-visitado: #a996d8;
+
+  --fonte: Arial, Helvetica, "Segoe UI", sans-serif;
+  --fonte-mono: Consolas, "Liberation Mono", Menlo, monospace;
+
+  --largura-lateral: 176px;
+  --largura-total: 1000px;
+  --raio: 4px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 18px;
+  min-height: 100vh;
+  background: linear-gradient(135deg, var(--cor-fundo-inicio), var(--cor-fundo-fim));
+  background-attachment: fixed;
+  color: var(--cor-texto);
+  font-family: var(--fonte);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+/* --------------------------------------------------------------------------
+   LAYOUT
+   -------------------------------------------------------------------------- */
+.layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  max-width: var(--largura-total);
+  margin-inline: auto;
+}
+
+.conteudo {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Painel: a caixa escura usada em tudo */
+.painel {
+  background-color: var(--cor-painel);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+  padding: 22px 26px;
+}
+
+@media (max-width: 720px) {
+  .layout {
+    flex-direction: column;
+  }
+
+  .barra-lateral {
+    width: 100%;
+    position: static;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   TIPOGRAFIA
+   -------------------------------------------------------------------------- */
+h1, h2, h3 {
+  margin: 0 0 14px;
+  line-height: 1.25;
+}
+
+h1 { font-size: 26px; }
+h2 { font-size: 20px; margin-top: 26px; }
+h3 { font-size: 17px; margin-top: 22px; }
+
+p {
+  margin: 0 0 14px;
+}
+
+p:last-child,
+ul:last-child,
+ol:last-child {
+  margin-bottom: 0;
+}
+
+a {
+  color: var(--cor-link);
+  text-decoration: underline;
+}
+
+a:visited {
+  color: var(--cor-link-visitado);
+}
+
+a:hover {
+  color: #ffffff;
+}
+
+code {
+  font-family: var(--fonte-mono);
+  font-size: 0.9em;
+  background-color: rgba(0, 0, 0, 0.25);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+pre {
+  background-color: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-family: var(--fonte-mono);
+  font-size: 13px;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+}
+
+blockquote {
+  margin: 18px 0;
+  padding-left: 14px;
+  border-left: 3px solid var(--cor-borda);
+  color: var(--cor-texto-suave);
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--cor-borda);
+  margin: 14px 0;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+.texto-suave {
+  color: var(--cor-texto-suave);
+}
+
+/* --------------------------------------------------------------------------
+   COMPONENTE: BARRA LATERAL
+   -------------------------------------------------------------------------- */
+.barra-lateral {
+  width: var(--largura-lateral);
+  flex-shrink: 0;
+  position: sticky;
+  top: 18px;
+  padding: 12px;
+}
+
+.barra-lateral__avatar {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--cor-borda);
+  margin-bottom: 12px;
+}
+
+.barra-lateral__lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-weight: bold;
+}
+
+.barra-lateral__lista li + li {
+  margin-top: 2px;
+}
+
+/* --------------------------------------------------------------------------
+   COMPONENTE: FILTRO (abas de conteudo)
+   -------------------------------------------------------------------------- */
+.filtro {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.filtro__item {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: bold;
+  color: var(--cor-link);
+  background: transparent;
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+.filtro__item:hover {
+  color: #ffffff;
+}
+
+.filtro__item.esta-ativo {
+  color: #ffffff;
+  background-color: rgba(0, 0, 0, 0.25);
+}
+
+/* --------------------------------------------------------------------------
+   COMPONENTE: LISTA DE POSTS
+   -------------------------------------------------------------------------- */
+.lista-posts {
+  margin: 0;
+  padding-left: 26px;
+}
+
+.lista-posts li {
+  margin-bottom: 10px;
+}
+
+.lista-posts a {
+  font-weight: bold;
+}
+
+.lista-posts time {
+  font-size: 13px;
+  font-weight: bold;
+}
+
+/* --------------------------------------------------------------------------
+   COMPONENTE: POST
+   -------------------------------------------------------------------------- */
+.post__meta {
+  margin: -6px 0 20px;
+  font-size: 13px;
+  color: var(--cor-texto-suave);
+}
+
+.post__voltar {
+  font-size: 13px;
+}

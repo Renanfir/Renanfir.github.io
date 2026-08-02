@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Graxa Veia</title>
+  <meta name="description" content="Blog about books, software and the credit market.">
+  <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body data-raiz="">
+
+  <div class="layout">
+
+    <blog-barra-lateral></blog-barra-lateral>
+
+    <div class="conteudo">
+
+      <!-- Apresentacao -->
+      <section class="painel">
+        <h1>Welcome to the Cubinha's Blog</h1>
+        <p>
+          In this blog i'll write about books, software, and any others things that I find interesting. I hope you enjoy it!
+        </p>
+      </section>
+      <section class="painel">
+        <h1>About Me</h1>
+        <p>
+          My name is Renan and I live in Brazil. I'm a Junior Software Developer.
+          I work with web development. This blog is a way to practice my writing skills, exercise my 
+          english and memorize the things I learn.
+        </p>
+      </section>
+      <!-- Filtro de conteudo + secoes -->
+      <section class="painel">
+        <blog-filtro></blog-filtro>
+
+        <div data-secao="FIDC">
+          <blog-lista-posts secao="FIDC"></blog-lista-posts>
+        </div>
+
+        <div data-secao="Books" hidden>
+          <blog-lista-posts secao="Books"></blog-lista-posts>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <script src="js/dados-posts.js"></script>
+  <script src="js/componentes.js"></script>
+</body>
+</html>

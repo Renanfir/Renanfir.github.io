@@ -1,0 +1,12 @@
+# Pacotes gerados para deploy
+*.zip
+
+# Arquivos do sistema operacional
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Configuracao de editores
+.vscode/
+.idea/
+*.swp
