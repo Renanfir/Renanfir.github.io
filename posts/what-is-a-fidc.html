@@ -16,6 +16,113 @@
       <article class="painel">
         <blog-post-cabecalho></blog-post-cabecalho>
 
+        <h2>What is a FIDC</h2>
+        <p>
+          A FIDC is a pool of resources: a fund whose assets are made up of receivables, such
+          as trade receivables (<em>duplicatas</em>) and credit card receivables.
+        </p>
+
+        <h2>Basic terms</h2>
+
+        <h3>Instrument (<em>título</em>)</h3>
+        <p>Term used to represent a receivable. It can be:</p>
+        <ul>
+          <li>invoices (<em>notas fiscais</em>);</li>
+          <li>contracts;</li>
+          <li>card Receivable Units (<em>UR</em>);</li>
+          <li>other financial instruments.</li>
+        </ul>
+
+        <h3>Batch (<em>remessa</em>)</h3>
+        <p>
+          In our system, a batch is a set of instruments that have not been traded yet. Each
+          package has a unique identifier called <code>idRemessa</code>, which lets our trading
+          desk find it quickly by number.
+        </p>
+        <p>
+          These sets can be grouped or split as needed, either at the request of the trading
+          desk or of the client, which gives flexibility in managing the batches.
+        </p>
+
+        <h3>Key participants</h3>
+        <ul>
+          <li>
+            <strong>Assignor / Issuer</strong> (<em>cedente/emissor</em>) — the entity that
+            issues the instrument.
+          </li>
+          <li>
+            <strong>Drawee / Debtor</strong> (<em>sacado/devedor</em>) — the entity responsible
+            for paying the instrument.
+          </li>
+        </ul>
+
+        <h2>Credit rights</h2>
+        <p>
+          These are the receivables purchased by the fund: trade receivables
+          (<em>duplicatas</em>), credit card receivables, Bank Credit Notes (CCBs), contracts,
+          and so on.
+        </p>
+
+        <h2>FIDC structure</h2>
+        <p>
+          Quotas: the classes define the priority order for receiving returns and amortization.
+        </p>
+
+        <div class="tabela-rolagem">
+          <table class="tabela">
+            <thead>
+              <tr>
+                <th>Class</th>
+                <th>Priority</th>
+                <th>Risk</th>
+                <th>Who usually holds it</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Senior</strong></td>
+                <td>first to be paid</td>
+                <td>lower</td>
+                <td>external investors</td>
+              </tr>
+              <tr>
+                <td><strong>Mezzanine</strong></td>
+                <td>intermediate</td>
+                <td>medium</td>
+                <td>investors / structurers</td>
+              </tr>
+              <tr>
+                <td><strong>Subordinated</strong></td>
+                <td>last to be paid, first to lose</td>
+                <td>higher</td>
+                <td>usually the <strong>assignor / originator</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2>PDD</h2>
+        <p>
+          An allowance for doubtful accounts, which adjusts the fund's net assets. On a
+          redemption, if a receivable is past due it is adjusted by the PDD: its value goes
+          down and the investor loses money.
+        </p>
+
+        <h2>Subordination ratio</h2>
+        <p>
+          The amount of loss that can happen before the senior investor is affected. For
+          example:
+        </p>
+        <ul>
+          <li>fund value: R$ 100.00;</li>
+          <li>senior investor: R$ 80.00;</li>
+          <li>junior (subordinated) investor: R$ 20.00, or 20% of the fund's value.</li>
+        </ul>
+        <p>
+          In other words, if the fund loses up to 20% of its net asset value, the loss is borne
+          by the junior investors alone.
+        </p>
+
         <hr>
         <p class="post__voltar"><a href="../index.html">Back to the list</a></p>
       </article>

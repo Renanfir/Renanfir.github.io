@@ -26,7 +26,7 @@ window.CONFIGURACAO_BLOG = {
 window.POSTS = [
   {
     slug: "what-is-a-fidc",
-    titulo: "What is a FIDC, what it is for and who takes part in it",
+    titulo: "What is a FIDC: basic terms, structure, PDD and subordination ratio",
     data: "2026-08-02",
     secao: "FIDC"
   },
