@@ -1,6 +1,7 @@
 /* ==========================================================================
    BLOG - ESTILOS
-   Layout simples: barra lateral fixa + paineis de conteudo sobre fundo gradiente.
+   Layout simples: barra lateral fixa + paineis de conteudo opacos sobre uma
+   imagem de fundo fixa (com o gradiente como reserva).
    Para trocar a identidade visual, altere apenas o bloco :root.
    ========================================================================== */
 
@@ -13,6 +14,12 @@
   --cor-texto-suave: #a89f97;
   --cor-link: #b9a7e8;
   --cor-link-visitado: #a996d8;
+
+  /* Plano de fundo: imagem fixa que aparece em volta dos paineis de conteudo.
+     O veu escuro evita que a colagem brigue com o texto; baixe a opacidade de
+     --escurecer-fundo para deixar a imagem mais viva. */
+  --imagem-fundo: url("../imagens/fundo-blog.png");
+  --escurecer-fundo: rgba(14, 12, 11, 0.32);
 
   --fonte: Arial, Helvetica, "Segoe UI", sans-serif;
   --fonte-mono: Consolas, "Liberation Mono", Menlo, monospace;
@@ -36,6 +43,23 @@ body {
   font-family: var(--fonte);
   font-size: 15px;
   line-height: 1.55;
+}
+
+/* Camada fixa com a imagem de fundo: fica atras do conteudo e na frente do
+   gradiente do body. Usamos um pseudo-elemento em vez de
+   background-attachment: fixed porque o Safari no iOS nao respeita o fixed. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(var(--escurecer-fundo), var(--escurecer-fundo)),
+    var(--imagem-fundo);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+  pointer-events: none;
 }
 
 /* --------------------------------------------------------------------------
