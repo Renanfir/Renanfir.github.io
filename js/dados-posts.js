@@ -25,12 +25,6 @@ window.CONFIGURACAO_BLOG = {
 
 window.POSTS = [
   {
-    slug: "explore-it-chapter-2",
-    titulo: "Explore It! - Chapter 2: Exploratory Testing",
-    data: "2026-08-09",
-    secao: "Books"
-  },
-  {
     slug: "what-is-a-fidc",
     titulo: "What is a FIDC: terms, structure, PDD, subordination and life cycle",
     data: "2026-08-02",

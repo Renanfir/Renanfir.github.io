@@ -16,6 +16,86 @@
       <article class="painel">
         <blog-post-cabecalho></blog-post-cabecalho>
 
+        <!-- ====================================================================
+             CAPITULO 1
+             Para o proximo capitulo, copie o bloco abaixo (do <h2> ate o <hr>)
+             e troque o numero e o conteudo.
+             ==================================================================== -->
+        <h2>Chapter 1 &mdash; Exploratory Testing</h2>
+
+        <h3>Two questions every test should answer</h3>
+        <p>
+          When writing tests, there is no need to create a large number of them. What matters
+          is that they answer two questions:
+        </p>
+
+        <div class="tabela-rolagem">
+          <table class="tabela">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Question</th>
+                <th>What it looks for</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>1</strong></td>
+                <td>Does the program work the way it was designed to?</td>
+                <td>the expected behaviour, the requirements as they were written</td>
+              </tr>
+              <tr>
+                <td><strong>2</strong></td>
+                <td>Are there any other risks?</td>
+                <td>everything nobody thought about when the feature was designed</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>
+          Thinking about the first question: the program needs to normalize its inputs and to
+          have a way of checking everything that could turn into an error.
+        </p>
+
+        <h3>Why exploratory testing helps</h3>
+        <p>
+          Exploratory testing helps a lot with both questions, because in this kind of testing
+          we use the insight gained from the first test to design the next one. For example:
+        </p>
+
+        <p>
+          If a system has a security rule that blocks the user after 5 failed password
+          attempts, you now have an insight about the blocking mechanism. So you think:
+        </p>
+
+        <blockquote>
+          If I type the correct password, log out, and try to log in again, will the counter of
+          5 failed attempts be reset?
+        </blockquote>
+
+        <p>
+          That is why exploratory tests are more flexible and more effective than a unit test,
+          which is fixed to a single rule.
+        </p>
+
+        <h3>Exploration is not passive</h3>
+        <p>
+          To make exploratory testing effective, you cannot simply run the tests you planned in
+          a passive way, writing nothing down. You need to take notes of:
+        </p>
+
+        <ul>
+          <li>doubts that came up during the session;</li>
+          <li>the flows you went through;</li>
+          <li>anything else you need to remember later.</li>
+        </ul>
+
+        <p>
+          Then you pass those notes on to someone else, so that the team's knowledge about the
+          program keeps growing.
+        </p>
+
         <hr>
         <p class="post__voltar"><a href="../index.html">Back to the list</a></p>
       </article>
