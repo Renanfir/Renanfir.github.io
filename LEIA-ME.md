@@ -14,7 +14,7 @@ blog/
 ├── posts/
 │   ├── _modelo.html        template para copiar
 │   └── <slug>.html         um arquivo por post
-└── imagens/avatar.svg      troque pela sua foto
+└── imagens/avatar.jpg      foto de perfil da barra lateral
 ```
 
 ## Criar um post

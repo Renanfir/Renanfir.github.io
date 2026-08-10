@@ -11,7 +11,7 @@
 
 window.CONFIGURACAO_BLOG = {
   nome: "Graxa Veia",
-  avatar: "imagens/avatar.svg",
+  avatar: "imagens/avatar.jpg",
 
   navegacao: [
     { rotulo: "Home", href: "index.html" }
