@@ -10,7 +10,7 @@
    ========================================================================== */
 
 window.CONFIGURACAO_BLOG = {
-  nome: "Graxa Veia",
+  nome: "Renan's blog",
   avatar: "imagens/avatar.jpg",
 
   navegacao: [
