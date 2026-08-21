@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Carregando...</title>
+  <link rel="stylesheet" href="../css/estilos.css">
+</head>
+<body data-raiz="../" data-slug="amortization-systems">
+
+  <div class="layout">
+
+    <blog-barra-lateral></blog-barra-lateral>
+
+    <div class="conteudo">
+      <article class="painel">
+        <blog-post-cabecalho></blog-post-cabecalho>
+
+        <h2>SAC</h2>
+        <p>
+          The constant amortization system (<em>Sistema de Amortização Constante</em>) divides
+          the principal into equal parts and charges interest on the outstanding balance. The
+          principal amortization is constant, obtained by dividing the financed amount by the
+          term; interest and installments are decreasing.
+        </p>
+
+        <h2>Price</h2>
+        <p>
+          The constant installment system, also called the French system (<em>Sistema
+          Francês</em>). It fixes the installment and lets the composition vary: at the
+          beginning it is almost all interest, at the end it is almost all principal. Constant
+          installment, decreasing interest and increasing amortization.
+        </p>
+
+        <h2>Bullet</h2>
+        <p>
+          This is the simplest system. Everything is paid at maturity.
+        </p>
+
+        <h2>Side by side</h2>
+
+        <div class="tabela-rolagem">
+          <table class="tabela">
+            <thead>
+              <tr>
+                <th>System</th>
+                <th>Installment</th>
+                <th>Interest</th>
+                <th>Amortization</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>SAC</strong></td>
+                <td>decreasing</td>
+                <td>decreasing</td>
+                <td>constant</td>
+              </tr>
+              <tr>
+                <td><strong>Price</strong></td>
+                <td>constant</td>
+                <td>decreasing</td>
+                <td>increasing</td>
+              </tr>
+              <tr>
+                <td><strong>Bullet</strong></td>
+                <td colspan="3">a single payment at maturity</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <hr>
+        <p class="post__voltar"><a href="../index.html">Back to the list</a></p>
+      </article>
+    </div>
+  </div>
+
+  <script src="../js/dados-posts.js"></script>
+  <script src="../js/componentes.js"></script>
+</body>
+</html>
