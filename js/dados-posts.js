@@ -25,6 +25,12 @@ window.CONFIGURACAO_BLOG = {
 
 window.POSTS = [
   {
+    slug: "equity-issuances-and-capital-contributions",
+    titulo: "Equity: issuances and capital contributions",
+    data: "2026-08-21",
+    secao: "FIDC"
+  },
+  {
     slug: "what-is-a-fidc",
     titulo: "What is a FIDC: terms, structure, PDD, subordination and life cycle",
     data: "2026-08-02",
