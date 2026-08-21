@@ -18,8 +18,9 @@
 
         <p>
           Equity (<em>patrimônio</em>) is the side of the fund that deals with quotas instead of
-          receivables: how many quotas the fund offers, and who buys them. Two records drive
-          that: <strong>issuances</strong> and <strong>capital contributions</strong>.
+          receivables: how many quotas the fund offers, and who buys them. Three records drive
+          that: <strong>issuances</strong>, <strong>capital contributions</strong> and the
+          <strong>investors</strong> behind them.
         </p>
 
         <h2>Issuances (<em>emissões</em>)</h2>
@@ -76,6 +77,51 @@
           A capital contribution is the record of an investor buying a part of an issuance made
           by the fund.
         </p>
+
+        <h2>Investors</h2>
+
+        <h3>Risk profile (<em>suitability</em>)</h3>
+        <p>
+          This is the investor's risk tolerance, assessed through a questionnaire. There are
+          three levels in <code>PERFIS</code>:
+        </p>
+        <ul>
+          <li><strong>Low</strong> (<em>baixo</em>) — prioritizes capital preservation;</li>
+          <li><strong>Medium</strong> (<em>médio</em>) — accepts moderate fluctuation;</li>
+          <li><strong>High</strong> (<em>alto</em>) — tolerates high volatility.</li>
+        </ul>
+
+        <h3>Investor level</h3>
+
+        <div class="tabela-rolagem">
+          <table class="tabela">
+            <thead>
+              <tr>
+                <th>Level</th>
+                <th>Criterion</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>General</strong> (<em>geral</em>)</td>
+                <td>no specific qualification — the retail investor</td>
+              </tr>
+              <tr>
+                <td><strong>Qualified</strong> (<em>qualificado</em>)</td>
+                <td>
+                  &ge; R$ 1 million in investments, or a professional certification
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Professional</strong> (<em>profissional</em>)</td>
+                <td>
+                  &ge; R$ 10 million, or an authorized institution (bank, insurer, asset
+                  manager, fund)
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
         <hr>
         <p class="post__voltar"><a href="../index.html">Back to the list</a></p>
