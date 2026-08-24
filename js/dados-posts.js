@@ -25,6 +25,18 @@ window.CONFIGURACAO_BLOG = {
 
 window.POSTS = [
   {
+    slug: "accounts-receivable-payable-and-cash-entries",
+    titulo: "Accounts receivable, accounts payable and cash entries",
+    data: "2026-08-24",
+    secao: "FIDC"
+  },
+  {
+    slug: "custody-audit-rating-legal-and-taxes",
+    titulo: "Custody, audit, rating, legal, DARF, IR and IOF",
+    data: "2026-08-24",
+    secao: "FIDC"
+  },
+  {
     slug: "amortization-systems",
     titulo: "Amortization systems: SAC, Price and Bullet",
     data: "2026-08-21",
