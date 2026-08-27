@@ -3,10 +3,12 @@
    Web Components nativos, sem framework e sem build.
 
      <blog-barra-lateral>    avatar + links de navegacao e contato
-     <blog-lista-posts>      lista numerada com titulo e data; o atributo
+     <blog-lista-posts>      lista numerada com titulo e data (a de
+                             "atualizado", se houver); o atributo
                              secao="<id>" filtra os posts daquela aba
      <blog-filtro>           abas que alternam os blocos com data-secao
-     <blog-post-cabecalho>   titulo e data do post, lidos do data-slug do body
+     <blog-post-cabecalho>   titulo e datas do post, lidos do data-slug do body
+                             (data de publicacao e, se houver, "atualizado")
    ========================================================================== */
 
 (function () {
@@ -22,11 +24,18 @@
       return window.CONFIGURACAO_BLOG || {};
     },
 
+    /** Data que ordena e aparece na lista: a mais recente das duas. */
+    dataRecente(post) {
+      return post.atualizado && post.atualizado > post.data
+        ? post.atualizado
+        : post.data;
+    },
+
     /** Sem secao, devolve todos os posts. Com secao, so os daquela aba. */
     posts(secao) {
       return (window.POSTS || [])
         .filter((post) => !secao || post.secao === secao)
-        .sort((a, b) => (a.data < b.data ? 1 : -1));
+        .sort((a, b) => (Util.dataRecente(a) < Util.dataRecente(b) ? 1 : -1));
     },
 
     buscarPost(slug) {
@@ -91,13 +100,19 @@
       }
 
       const itens = posts
-        .map(
-          (post) => `
+        .map((post) => {
+          const data = Util.dataRecente(post);
+          const marca =
+            data === post.data
+              ? ""
+              : ` <span class="texto-suave">(updated)</span>`;
+
+          return `
           <li>
             <a href="${Util.raiz()}posts/${post.slug}.html">${Util.escapar(post.titulo)}</a>
-            | <time datetime="${Util.escapar(post.data)}">${Util.escapar(post.data)}</time>
-          </li>`
-        )
+            | <time datetime="${Util.escapar(data)}">${Util.escapar(data)}</time>${marca}
+          </li>`;
+        })
         .join("");
 
       this.innerHTML = `<ol class="lista-posts">${itens}</ol>`;
@@ -158,10 +173,18 @@
       const configuracao = Util.configuracao();
       document.title = `${post.titulo} | ${configuracao.nome}`;
 
+      const atualizado =
+        post.atualizado && post.atualizado > post.data
+          ? ` &middot; last updated <time datetime="${Util.escapar(
+              post.atualizado
+            )}">${Util.escapar(post.atualizado)}</time>`
+          : "";
+
       this.innerHTML = `
         <h1>${Util.escapar(post.titulo)}</h1>
         <p class="post__meta">
-          <time datetime="${Util.escapar(post.data)}">${Util.escapar(post.data)}</time>
+          published
+          <time datetime="${Util.escapar(post.data)}">${Util.escapar(post.data)}</time>${atualizado}
         </p>`;
     }
   }

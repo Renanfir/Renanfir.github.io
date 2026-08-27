@@ -7,6 +7,12 @@
    1. Copie posts/_modelo.html para posts/meu-slug.html
    2. Adicione uma linha no inicio do array POSTS abaixo
    3. Use "secao" para escolher em qual aba o post aparece (veja SECOES)
+
+   CAMPO OPCIONAL "atualizado":
+   Post que recebe conteudo novo depois de publicado (um capitulo novo, por
+   exemplo) leva "atualizado" com a data desse conteudo. A lista da pagina
+   inicial passa a ordenar e mostrar essa data, marcada com "(updated)", e o
+   cabecalho do post mostra as duas. Sem o campo, nada muda.
    ========================================================================== */
 
 window.CONFIGURACAO_BLOG = {
@@ -65,12 +71,14 @@ window.POSTS = [
     titulo:
       "Explore It!: Reduce Risk and Increase Confidence with Exploratory Testing",
     data: "2026-08-01",
+    atualizado: "2026-08-12",
     secao: "Books"
   },
   {
     slug: "a-mind-for-numbers",
     titulo: "A Mind for Numbers",
     data: "2026-07-26",
+    atualizado: "2026-08-27",
     secao: "Books"
   }
 ];

@@ -302,3 +302,11 @@ img {
 .post__voltar {
   font-size: 13px;
 }
+
+/* Data em que cada capitulo foi publicado. Fica logo abaixo do <h2> do
+   capitulo, para que um post antigo com capitulos novos mostre isso. */
+.capitulo__data {
+  margin: -10px 0 16px;
+  font-size: 13px;
+  color: var(--cor-texto-suave);
+}

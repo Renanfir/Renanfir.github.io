@@ -31,6 +31,31 @@ blog/
 
 Titulo, data e `<title>` da aba sao preenchidos pelos metadados.
 
+## Post que cresce depois de publicado (capitulos)
+
+Post de livro recebe um capitulo por vez. Para que o conteudo novo nao fique
+escondido atras da data de publicacao original:
+
+1. No post, coloque a data logo abaixo do `<h2>` do capitulo:
+
+```html
+<h2>Chapter 3 &mdash; Learning is creating</h2>
+<p class="capitulo__data">Posted on <time datetime="2026-08-27">2026-08-27</time></p>
+```
+
+2. Em `js/dados-posts.js`, ponha no post o campo opcional `atualizado` com a
+   data do capitulo mais recente:
+
+```js
+{ slug: "a-mind-for-numbers", titulo: "A Mind for Numbers",
+  data: "2026-07-26", atualizado: "2026-08-27", secao: "Books" }
+```
+
+Com `atualizado`, a lista da pagina inicial ordena e mostra essa data com a
+marca `(updated)`, e o cabecalho do post mostra
+`published <data> - last updated <atualizado>`. Sem o campo, o post continua
+mostrando apenas a data de publicacao.
+
 ## Abas (secoes)
 
 A pagina inicial mostra os posts separados por aba. As abas ficam em
@@ -51,9 +76,9 @@ delas ele aparece. Para criar uma aba nova:
 | Componente | O que faz |
 |---|---|
 | `<blog-barra-lateral>` | avatar + links de navegacao e contato |
-| `<blog-lista-posts>` | lista numerada com titulo e data; `secao="<id>"` filtra a aba |
+| `<blog-lista-posts>` | lista numerada com titulo e data (a de `atualizado`, se houver); `secao="<id>"` filtra a aba |
 | `<blog-filtro>` | abas que alternam os blocos com `data-secao` |
-| `<blog-post-cabecalho>` | titulo e data do post, lidos do `data-slug` |
+| `<blog-post-cabecalho>` | titulo e datas do post (publicacao e `atualizado`), lidos do `data-slug` |
 
 ## Personalizacao
 
