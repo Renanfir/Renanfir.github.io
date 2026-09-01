@@ -71,14 +71,14 @@ window.POSTS = [
     titulo:
       "Explore It!: Reduce Risk and Increase Confidence with Exploratory Testing",
     data: "2026-08-01",
-    atualizado: "2026-08-12",
+    atualizado: "2026-09-01",
     secao: "Books"
   },
   {
     slug: "a-mind-for-numbers",
     titulo: "A Mind for Numbers",
     data: "2026-07-26",
-    atualizado: "2026-08-27",
+    atualizado: "2026-09-01",
     secao: "Books"
   }
 ];
