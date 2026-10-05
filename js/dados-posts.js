@@ -78,7 +78,7 @@ window.POSTS = [
     slug: "a-mind-for-numbers",
     titulo: "A Mind for Numbers",
     data: "2026-07-26",
-    atualizado: "2026-09-19",
+    atualizado: "2026-10-05",
     secao: "Books"
   }
 ];
