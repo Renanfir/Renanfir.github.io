@@ -31,6 +31,12 @@ window.CONFIGURACAO_BLOG = {
 
 window.POSTS = [
   {
+    slug: "iot-coffee-scale",
+    titulo: "IoT coffee scale: ESP8266 + HX711 + Loki + Grafana",
+    data: "2026-11-02",
+    secao: "Projects"
+  },
+  {
     slug: "accounts-receivable-payable-and-cash-entries",
     titulo: "Accounts receivable, accounts payable and cash entries",
     data: "2026-08-24",
@@ -90,5 +96,6 @@ window.POSTS = [
    <div data-secao="<id>"> no index.html. */
 window.SECOES = [
   { id: "FIDC", rotulo: "FIDC" },
-  { id: "Books", rotulo: "Books" }
+  { id: "Books", rotulo: "Books" },
+  { id: "Projects", rotulo: "Projects" }
 ];

@@ -7,6 +7,8 @@
                              "atualizado", se houver); o atributo
                              secao="<id>" filtra os posts daquela aba
      <blog-filtro>           abas que alternam os blocos com data-secao
+                             (secoes="id:Rotulo,..." define abas proprias,
+                             como o seletor de idioma de um post)
      <blog-post-cabecalho>   titulo e datas do post, lidos do data-slug do body
                              (data de publicacao e, se houver, "atualizado")
    ========================================================================== */
@@ -121,8 +123,21 @@
 
   /* ---------------------------------------------------------------- */
   class Filtro extends HTMLElement {
+    /** Abas do atributo secoes="id:Rotulo,id:Rotulo"; sem ele, usa window.SECOES. */
+    lerSecoes() {
+      const atributo = this.getAttribute("secoes");
+      if (!atributo) {
+        return window.SECOES || [];
+      }
+
+      return atributo.split(",").map(function (item) {
+        const [id, rotulo] = item.split(":");
+        return { id: id.trim(), rotulo: (rotulo || id).trim() };
+      });
+    }
+
     connectedCallback() {
-      const secoes = window.SECOES || [];
+      const secoes = this.lerSecoes();
       if (!secoes.length) return;
 
       this.innerHTML = `
@@ -140,7 +155,8 @@
         </nav>`;
 
       const botoes = Array.from(this.querySelectorAll(".filtro__item"));
-      const paineis = Array.from(document.querySelectorAll("[data-secao]"));
+      const escopo = this.hasAttribute("secoes") ? this.parentElement : document;
+      const paineis = Array.from(escopo.querySelectorAll("[data-secao]"));
 
       const ativar = (id) => {
         botoes.forEach((botao) =>

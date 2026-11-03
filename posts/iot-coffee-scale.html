@@ -1,0 +1,1393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Carregando...</title>
+  <link rel="stylesheet" href="../css/estilos.css">
+</head>
+<body data-raiz="../" data-slug="iot-coffee-scale">
+
+  <div class="layout">
+
+    <blog-barra-lateral></blog-barra-lateral>
+
+    <div class="conteudo">
+      <article class="painel">
+        <blog-post-cabecalho></blog-post-cabecalho>
+
+        <blog-filtro secoes="en:English,pt:Português"></blog-filtro>
+
+        <!-- ====================================================================
+             ENGLISH
+             ==================================================================== -->
+        <div data-secao="en" lang="en">
+
+          <h2>The problem</h2>
+          <p>
+            How much coffee is still left in the thermos? To answer that without lifting the
+            lid, I built a scale with a NodeMCU (ESP8266), an HX711 module and a load cell. It
+            weighs the thermos every 5 seconds and shows the level on a Grafana panel.
+          </p>
+          <p>
+            The weight goes straight from the ESP8266 to Grafana Loki, as a JSON log line. I
+            didn't need an API, a database or a new server: the Loki that already stored the
+            applications' logs now stores the coffee weight too.
+          </p>
+          <p>
+            This post covers the whole path: parts, wiring, Arduino IDE setup, the request to
+            Loki, the code, tare and calibration, the dashboard and the problems that showed up
+            along the way.
+          </p>
+
+          <h2>Architecture</h2>
+<pre><code>Load cell -&gt; HX711 -&gt; NodeMCU (ESP8266) -&gt; Wi-Fi -&gt; Grafana (data source proxy) -&gt; Loki
+                                                     Grafana (dashboard)    &lt;- LogQL -- Loki</code></pre>
+          <p>
+            The ESP8266 can't reach Loki, which only exists inside the cluster. It sends the
+            weight to Grafana, which forwards the push to Loki and later reads the same data
+            back to build the dashboard.
+          </p>
+
+          <h2>Parts</h2>
+          <p>
+            The project started with an Arduino reading the HX711, but the NodeMCU reads the
+            HX711 directly and also has Wi-Fi, so the Arduino was dropped.
+          </p>
+          <div class="tabela-rolagem">
+            <table class="tabela">
+              <thead>
+                <tr><th>Part</th><th>What it does</th><th>Note</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>NodeMCU 1.0 (ESP-12E, CP2102 USB chip)</td><td>Reads the HX711, connects to Wi-Fi and sends the weight</td><td>Has USB, a 3.3 V regulator and plenty of pins</td></tr>
+                <tr><td>HX711 module</td><td>Amplifies the cell signal and turns it into a number (24-bit ADC)</td><td>Powered at 3.3 V, same as the ESP</td></tr>
+                <tr><td>Bar load cell (80 &times; 12.7 &times; 12.7 mm)</td><td>Measures weight through the bending of the aluminum</td><td>Capacity above the full thermos, with margin for whoever presses the pump</td></tr>
+                <tr><td>Breadboard and jumpers</td><td>Connections without soldering</td><td>A loose wire here is the most common cause of a stuck reading</td></tr>
+                <tr><td>Micro-USB data cable</td><td>Flashing the firmware and watching the serial monitor</td><td>A charge-only cable powers the board, but the PC doesn't see it</td></tr>
+                <tr><td>5 V USB charger</td><td>Powering the scale day to day</td><td>Once flashed, the board doesn't need a PC</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2>Wiring</h2>
+          <p>There are 8 wires: 4 from the cell to the HX711 and 4 from the HX711 to the NodeMCU.</p>
+
+          <h3>Load cell &rarr; HX711</h3>
+          <div class="tabela-rolagem">
+            <table class="tabela">
+              <thead>
+                <tr><th>Cell wire</th><th>HX711</th><th>Function</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Red</td><td>E+</td><td>Excitation +</td></tr>
+                <tr><td>Black</td><td>E&minus;</td><td>Excitation &minus;</td></tr>
+                <tr><td>White</td><td>A&minus;</td><td>Signal &minus;</td></tr>
+                <tr><td>Green</td><td>A+</td><td>Signal +</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>HX711 &rarr; NodeMCU</h3>
+          <div class="tabela-rolagem">
+            <table class="tabela">
+              <thead>
+                <tr><th>HX711</th><th>NodeMCU</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>VCC</td><td>3V3</td></tr>
+                <tr><td>GND</td><td>GND</td></tr>
+                <tr><td>DT</td><td>D5 (GPIO14)</td></tr>
+                <tr><td>SCK</td><td>D6 (GPIO12)</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p>Three things to watch:</p>
+          <ul>
+            <li><strong>Power the HX711 at 3.3 V, not 5 V.</strong> That way the DT logic level matches the ESP8266's.</li>
+            <li><strong>Avoid D3, D4 and D8 for the HX711.</strong> These pins set the board's boot mode and can keep it from starting.</li>
+            <li><strong>An inverted signal is not a defect.</strong> If the number drops when you add weight, swap the white and green wires or let the calibration fix the sign (see below).</li>
+          </ul>
+
+          <h2>Setting up the environment</h2>
+          <p>Everything runs in Arduino IDE 2. The ESP8266 board and the HX711 library are installed by the IDE itself.</p>
+          <ol>
+            <li>In <em>File &rarr; Preferences</em>, paste <code>https://arduino.esp8266.com/stable/package_esp8266com_index.json</code> into <em>Additional boards manager URLs</em>.</li>
+            <li>In the Boards Manager, install <strong>esp8266 by ESP8266 Community</strong>.</li>
+            <li>In the Library Manager, install <strong>HX711 Arduino Library by Bogdan Necula</strong>. Other libraries with a similar name (like <code>HX711_ADC</code>) have a different API and the sketch won't compile with them.</li>
+            <li>In <em>Tools &rarr; Board</em>, pick <strong>NodeMCU 1.0 (ESP-12E Module)</strong>.</li>
+            <li>Plug in the board and, in <em>Tools &rarr; Port</em>, pick the new port, named <code>Silicon Labs CP210x USB to UART Bridge (COMx)</code>.</li>
+            <li>Open the Serial Monitor at 115200.</li>
+          </ol>
+          <blockquote>
+            If no new port shows up, the problem is almost always the cable: many micro-USB
+            cables only charge. If the board shows up in Device Manager with a warning icon,
+            the <strong>CP210x Universal Windows Driver</strong> from Silicon Labs is missing.
+            Installing drivers requires admin rights on Windows; without them, ask IT or flash
+            the board on another computer.
+          </blockquote>
+          <p>
+            COM ports named &ldquo;Standard Serial over Bluetooth link&rdquo; belong to the
+            laptop's Bluetooth, not to the board. And the strange characters at the start of the
+            serial monitor are normal: they are ESP8266 boot messages, which use a different
+            baud rate.
+          </p>
+
+          <h2>Why Loki and not an API with a database</h2>
+          <p>
+            Loki is a log database, but it stores numbers very well when they come inside a JSON
+            line. With LogQL's <code>unwrap</code> operator, Grafana turns the <code>peso</code>
+            (weight) field of each line into a numeric series, ready to become a chart. Since it
+            already existed at the company for the applications' logs, the path got much
+            shorter.
+          </p>
+          <div class="tabela-rolagem">
+            <table class="tabela">
+              <thead>
+                <tr><th></th><th>Loki directly</th><th>API + database</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>What needs to be built</td><td>Nothing: just the POST from the ESP</td><td>Endpoint, table, deploy</td></tr>
+                <tr><td>How Grafana reads it</td><td>Existing Loki data source + LogQL</td><td>Database data source + SQL</td></tr>
+                <tr><td>History</td><td>Only for Loki's retention period</td><td>As long as you want</td></tr>
+                <tr><td>Business rules (alerts, server-side tare)</td><td>Live in the ESP or in Grafana</td><td>Live in the API</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            To know how much coffee there is right now, Loki's retention is not a problem. If
+            history ever matters (&ldquo;how many thermoses per week?&rdquo;), it's worth moving
+            to API + database.
+          </p>
+          <p>
+            One modeling detail: <strong>the weight goes in the line body, never in a
+            label</strong>. Labels identify the stream (<code>service_name="balanca"</code>,
+            <code>dispositivo="balanca-01"</code>) and must have few values. A weight as a label
+            would create a new stream on every reading and weigh Loki down.
+          </p>
+
+          <h2>Reaching Loki through Grafana</h2>
+          <p>
+            The ESP8266 doesn't talk to Loki directly: it sends the push to Grafana, which
+            forwards it to Loki through the data source proxy. This was needed because, in
+            Grafana's data source, Loki's URL was an internal Kubernetes name:
+          </p>
+<pre><code>http://loki-gateway.&lt;namespace&gt;.svc.cluster.local:80</code></pre>
+          <p>
+            <code>*.svc.cluster.local</code> names only exist inside the cluster. Grafana, which
+            runs in there, reaches Loki; a board on the office Wi-Fi doesn't. Instead of asking
+            to expose Loki, I used the proxy route Grafana itself offers:
+          </p>
+<pre><code>https://&lt;your-grafana&gt;/api/datasources/proxy/uid/&lt;loki-uid&gt;/loki/api/v1/push</code></pre>
+          <div class="tabela-rolagem">
+            <table class="tabela">
+              <thead>
+                <tr><th>Piece</th><th>Where to get it</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>&lt;your-grafana&gt;</code></td><td>The address you use in the browser</td></tr>
+                <tr><td><code>&lt;loki-uid&gt;</code></td><td>In Explore, the data source <code>"uid"</code> inside the link; or at the end of the URL in <em>Connections &rarr; Data sources &rarr; Loki</em></td></tr>
+                <tr><td>Token</td><td><em>Administration &rarr; Users and access &rarr; Service accounts</em>: create a service account with the <strong>Viewer</strong> role and generate a token (<code>glsa_...</code>)</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            In the test, the Viewer role was enough to write through the proxy. There was also no
+            need to send the tenant header (<code>X-Scope-OrgID</code>): if the data source has
+            one configured, Grafana adds it on its own when forwarding.
+          </p>
+          <blockquote>
+            Use the token, not a username and password. Everything in the firmware can be read
+            from the board's memory by anyone with physical access to it, and a leaked Viewer
+            token does far less damage than an admin password.
+          </blockquote>
+
+          <h2>The request</h2>
+          <p>
+            Each reading is a POST with one stream and one line. The labels go in
+            <code>stream</code>, and <code>values</code> holds a pair: the timestamp in
+            nanoseconds (as a string) and the log line, which here is a JSON with the weight.
+          </p>
+<pre><code>{
+  "streams": [{
+    "stream": { "service_name": "balanca", "dispositivo": "balanca-01" },
+    "values": [[ "1793298680116673000", "{\"peso\":2.345,\"unidade\":\"kg\"}" ]]
+  }]
+}</code></pre>
+          <p>
+            Loki requires the timestamp. The ESP8266 has no real clock, so it syncs the time via
+            NTP on startup (<code>configTime</code> with <code>a.st1.ntp.br</code> and
+            <code>pool.ntp.org</code>), and the code discards the reading while the clock is not
+            right. If the network blocks UDP port 123, nothing reaches Loki.
+          </p>
+          <p>Before flashing the board, you can test the whole path from the laptop:</p>
+<pre><code>curl -s -o /dev/null -w "%{http_code}\n" -X POST \
+  "https://&lt;your-grafana&gt;/api/datasources/proxy/uid/&lt;loki-uid&gt;/loki/api/v1/push" \
+  -H "Authorization: Bearer &lt;token&gt;" -H "Content-Type: application/json" \
+  -d "{\"streams\":[{\"stream\":{\"service_name\":\"balanca\",\"dispositivo\":\"balanca-teste\"},\"values\":[[\"$(date +%s)000000000\",\"{\\\"peso\\\":1.0}\"]]}]}"</code></pre>
+          <div class="tabela-rolagem">
+            <table class="tabela">
+              <thead>
+                <tr><th>Response</th><th>Meaning</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>204</td><td>Written. Loki returns no body on success</td></tr>
+                <tr><td>401</td><td>Missing or wrong token</td></tr>
+                <tr><td>403</td><td>The service account role doesn't allow it. Change Viewer to Editor</td></tr>
+                <tr><td>404</td><td>Wrong Grafana address or data source UID</td></tr>
+                <tr><td>400 with &ldquo;no org id&rdquo;</td><td>Loki uses tenants and the data source doesn't set one. Send <code>X-Scope-OrgID</code></td></tr>
+                <tr><td>Timeout</td><td>The address is not reachable from that network</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2>The code</h2>
+          <p>
+            The sketch has about 280 lines and does one thing per function. <code>loop()</code>
+            runs the cycle every 5 seconds: checks tare commands, makes sure Wi-Fi is up, reads
+            the HX711 and sends. The full code is at the end of the post (identifiers and
+            comments are in Portuguese).
+          </p>
+          <div class="tabela-rolagem">
+            <table class="tabela">
+              <thead>
+                <tr><th>Function</th><th>What it does</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>conectarWifi()</code></td><td>Connects and, if it fails, says why: network not found (wrong name or 5 GHz) or password rejected</td></tr>
+                <tr><td><code>listarRedes()</code></td><td>Lists the networks the board sees, in quotes, so you can copy the exact name</td></tr>
+                <tr><td><code>sincronizarRelogio()</code></td><td>Sets the time via NTP; without it Loki rejects the reading</td></tr>
+                <tr><td><code>obterTimestampNs()</code></td><td>Builds the timestamp in nanoseconds</td></tr>
+                <tr><td><code>enviarParaLoki()</code></td><td>Builds the JSON and does the HTTPS POST with the token</td></tr>
+                <tr><td><code>fazerTara()</code> / <code>calibrar()</code></td><td>Set the zero and the factor, and save both to memory</td></tr>
+                <tr><td><code>verificarComandos()</code></td><td>Handles the FLASH button and the serial monitor commands</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The timestamp comes from <code>gettimeofday</code>. Seconds go first, then the
+            microseconds with 6 digits and three zeros at the end, which gives nanoseconds
+            without needing a 64-bit integer:
+          </p>
+<pre><code>struct timeval agora;
+gettimeofday(&amp;agora, nullptr);
+snprintf(destino, tamanho, "%lu%06lu000", (unsigned long)agora.tv_sec, (unsigned long)agora.tv_usec);</code></pre>
+          <p>
+            The request uses <code>HTTPClient</code> with BearSSL's TLS client.
+            <code>setInsecure()</code> accepts the certificate without validating it, which is
+            enough for an internal test; in an exposed environment, pin the certificate
+            fingerprint.
+          </p>
+<pre><code>clienteHttps.setInsecure();
+http.begin(clienteHttps, URL_LOKI);
+http.addHeader("Content-Type", "application/json");
+http.addHeader("Authorization", String("Bearer ") + GRAFANA_TOKEN);
+int codigo = http.POST((uint8_t*)corpo, strlen(corpo));   // 204 = written</code></pre>
+          <p>When everything is right, the serial monitor shows one line per cycle (sample values):</p>
+<pre><code>Conectado. IP: 192.168.0.25
+Relogio OK
+Peso: 2.345 kg  (bruto 133912, fator 57104.3)
+Loki: 204 OK</code></pre>
+
+          <h2>Tare and calibration</h2>
+          <p>
+            The HX711 doesn't return kilograms: it returns a raw number, and the weight comes
+            from two constants. The <strong>tare</strong> is the offset, the raw number with the
+            scale empty. The <strong>calibration</strong> is the factor, how many raw units are
+            worth 1 kg.
+          </p>
+<pre><code>weight (kg) = (reading - offset) / factor</code></pre>
+          <p>
+            In the library, <code>tare()</code> measures the offset, <code>set_scale()</code>
+            sets the factor, <code>get_value()</code> returns <code>reading &minus; offset</code>
+            and <code>get_units()</code> already divides by the factor.
+          </p>
+          <p>
+            This is where I got it wrong before getting it right. The first readings looked like
+            negative grams, and the first idea was to divide by &minus;1000. A full 350 ml can,
+            about 0.37 kg, showed up as 0.003 kg. The problem was the factor: the
+            <code>-7050</code> in the code was a sample value from a tutorial, not my cell's.
+            Each cell has its own factor, and the right way is to measure it:
+          </p>
+<pre><code>void calibrar(float pesoRealKg) {
+  double leitura = balanca.get_value(20);    // average of 20 readings, already without the tare
+  balanca.set_scale(leitura / pesoRealKg);   // the factor's sign comes out right on its own
+  gravarCalibracao();
+}</code></pre>
+          <p>The sketch accepts commands through the serial monitor and through the board's own FLASH button, with no extra wire:</p>
+          <div class="tabela-rolagem">
+            <table class="tabela">
+              <thead>
+                <tr><th>Command</th><th>When to use</th><th>What it does</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>t</code> or hold FLASH</td><td>Empty scale</td><td>Does the tare</td></tr>
+                <tr><td><code>c 1000</code></td><td>With 1000 g on top</td><td>Calculates the factor</td></tr>
+                <tr><td><code>r</code></td><td>Wrong calibration saved</td><td>Goes back to the default factor and redoes the tare</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Step by step, the first time:</p>
+          <ol>
+            <li>Power it on with the plate empty and type <code>t</code>.</li>
+            <li>Put a known weight on it, preferably a sealed 1 kg package (a can's weight is less certain), and type <code>c 1000</code>.</li>
+            <li>Remove the package and check with another object of known weight.</li>
+          </ol>
+          <p>
+            Offset and factor are saved in the EEPROM, together with a marker number that says
+            the record is valid. This solves a real problem: with the tare done only at boot, a
+            power outage with the thermos on top would zero its weight. Now the board comes back
+            with the saved calibration, and only does the tare by itself the first time.
+          </p>
+          <p>
+            Two cautions: don't hold FLASH while powering the board on, because that puts it in
+            flashing mode; and redo the tare whenever you touch the assembly.
+          </p>
+
+          <h2>Showing it in Grafana</h2>
+          <p>
+            The data reaches Loki as a log, and three LogQL queries solve everything. To check
+            that it's arriving, open Explore, pick the Loki data source and run:
+          </p>
+<pre><code>{service_name="balanca", dispositivo="balanca-01"}</code></pre>
+          <p>
+            A new line should show up every 5 seconds, with the weight JSON. To turn it into a
+            number, <code>| json peso</code> extracts the field and <code>| unwrap peso</code>
+            turns it into a value:
+          </p>
+          <div class="tabela-rolagem">
+            <table class="tabela">
+              <thead>
+                <tr><th>Panel</th><th>Query</th><th>Type</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Current weight</td><td><code>last_over_time({service_name="balanca", dispositivo="$dispositivo"} | json peso | unwrap peso [1m])</code></td><td>Stat, instant query</td></tr>
+                <tr><td>Level</td><td>the same</td><td>Vertical bar gauge, 0 to 5 kg</td></tr>
+                <tr><td>History (optional)</td><td><code>avg_over_time({service_name="balanca", dispositivo="$dispositivo"} | json peso | unwrap peso [$__interval])</code></td><td>Time series</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            The final dashboard has the current weight and a wide column that rises and falls
+            with the weight. History was left out, because the question is &ldquo;how much is
+            there now&rdquo;. The column is a Bar gauge with vertical orientation and colors by
+            weight range (red, yellow, green). The <code>[1m]</code> window makes the panel show
+            &ldquo;No reading&rdquo; when the scale goes more than a minute without sending,
+            which gives away a board that is off or offline.
+          </p>
+          <p>
+            The dashboard is an importable JSON (<em>Dashboards &rarr; New &rarr; Import</em>),
+            with two variables: the Loki data source and <code>dispositivo</code> (device),
+            filled with the label values
+            (<code>label_values({service_name="balanca"}, dispositivo)</code>). With more than
+            one scale, just change <code>DISPOSITIVO</code> in each one's sketch.
+          </p>
+          <p>
+            Since the scale weighs thermos + coffee, the empty thermos already takes up part of
+            the bar. For the bar to go from &ldquo;empty&rdquo; to &ldquo;full&rdquo;, set the
+            panel's minimum and maximum to the weight of the empty and the full thermos.
+          </p>
+
+          <h2>Problems we ran into</h2>
+          <p>Almost none of the problems were in the code: cable, driver, network and calibration took more time than the sketch.</p>
+          <div class="tabela-rolagem">
+            <table class="tabela">
+              <thead>
+                <tr><th>Problem</th><th>Symptom</th><th>Solution</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Charge-only cable</td><td>The board turns on (the blue LED blinks on reset), but Windows shows no new port</td><td>A data cable, like a phone cable that transfers files</td></tr>
+                <tr><td>Driver without permission</td><td>&ldquo;CP2102 USB to UART Bridge Controller&rdquo; shows up with error 28</td><td>CP210x driver installed by IT, or flash on another PC</td></tr>
+                <tr><td>Ports that aren't the board</td><td>COM3 to COM6 listed as &ldquo;Standard Serial over Bluetooth link&rdquo;</td><td>Ignore them; the board's port only shows up when it's plugged in</td></tr>
+                <tr><td>5 GHz-only network</td><td>&ldquo;Network not found&rdquo;, and the network doesn't show up in <code>listarRedes()</code></td><td>A 2.4 GHz network (the company's IoT one) or a phone hotspot on 2.4 GHz</td></tr>
+                <tr><td>WPA3 security</td><td>The board doesn't connect</td><td>WPA2-Personal, or WPA2/WPA3 mixed mode</td></tr>
+                <tr><td>Loki internal to the cluster</td><td><code>*.svc.cluster.local</code> doesn't resolve outside the cluster</td><td>Push through Grafana's data source proxy</td></tr>
+                <tr><td>Sample calibration factor</td><td>Readings looking like negative grams; a 0.37 kg can read as 0.003 kg</td><td>Calibrate with a known weight (<code>c 1000</code>), no fixed conversions in the code</td></tr>
+                <tr><td>Weight stuck at 0.000</td><td>The number doesn't change with weight on top</td><td>Look at the raw value in the monitor: stuck = loose wire; changing = bad saved calibration (<code>r</code> and calibrate again)</td></tr>
+                <tr><td>Password in the firmware</td><td>Grafana admin password saved on the board</td><td>Service account token with the Viewer role</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2>Next steps</h2>
+          <ul>
+            <li><strong>Over-the-air updates (OTA).</strong> After the first flash by cable, the next ones would go over the network, without depending on cable and driver.</li>
+            <li><strong>Filter the pump press.</strong> Whoever pours coffee pushes the thermos down, and the reading at that moment is not valid. Readings above the full thermos weight can be discarded on the ESP.</li>
+            <li><strong>Coffee-running-out alert.</strong> A Grafana rule for when the weight gets close to the empty thermos weight.</li>
+            <li><strong>Validate the certificate.</strong> Replace <code>setInsecure()</code> with the Grafana certificate fingerprint.</li>
+          </ul>
+
+          <h2>Full code</h2>
+          <p>Change the uppercase values in the configuration block before flashing. The rest works as is.</p>
+<pre><code>// Balanca: celula de carga -&gt; HX711 -&gt; NodeMCU (ESP8266) -&gt; Wi-Fi -&gt; Grafana (proxy) -&gt; Loki
+// Placa: "NodeMCU 1.0 (ESP-12E Module)" | Biblioteca: "HX711 Arduino Library" (Bogdan Necula)
+// Ligacao: HX711 VCC-&gt;3V3, GND-&gt;GND, DT-&gt;D5, SCK-&gt;D6
+
+#include &lt;ESP8266WiFi.h&gt;
+#include &lt;ESP8266HTTPClient.h&gt;
+#include &lt;WiFiClientSecureBearSSL.h&gt;
+#include &lt;time.h&gt;
+#include &lt;sys/time.h&gt;
+#include &lt;EEPROM.h&gt;
+#include "HX711.h"
+
+// ===================== Configuracao =====================
+const char* WIFI_SSID = "SEU_WIFI";   // rede de 2,4 GHz
+const char* WIFI_SENHA = "SUA_SENHA";
+
+// Push pelo proxy de data source do Grafana, que repassa para o Loki interno do cluster
+// Formato: https://&lt;grafana&gt;/api/datasources/proxy/uid/&lt;uid do data source Loki&gt;/loki/api/v1/push
+const char* URL_LOKI = "https://SEU_GRAFANA/api/datasources/proxy/uid/UID_DO_LOKI/loki/api/v1/push";
+
+// Autenticacao no Grafana: prefira o token de service account; o usuario/senha so e usado sem token
+const char* GRAFANA_TOKEN = "glsa_SEU_TOKEN";   // Administration &gt; Users and access &gt; Service accounts &gt; Add token
+const char* GRAFANA_USUARIO = "";
+const char* GRAFANA_SENHA = "";
+const char* LOKI_TENANT = "";   // header X-Scope-OrgID, so se o Loki for multi-tenant
+
+// Labels do stream no Loki (mantenha fixos: o peso vai na linha, nunca em label)
+const char* SERVICO = "balanca";
+const char* DISPOSITIVO = "balanca-01";
+
+const int PINO_DT = D5;
+const int PINO_SCK = D6;
+const float FATOR_CALIBRACAO = -7050.0f;   // so vale ate calibrar pelo monitor serial ("c &lt;gramas&gt;"); depois fica gravado na placa
+const int PINO_BOTAO_TARA = 0;             // botao FLASH da propria NodeMCU
+const int LEITURAS_POR_MEDIA = 10;
+const unsigned long INTERVALO_ENVIO_MS = 5000;
+// ========================================================
+
+HX711 balanca;
+WiFiClient clienteHttp;
+BearSSL::WiFiClientSecure clienteHttps;
+unsigned long ultimoEnvio = 0;
+
+void conectarWifi() {
+  if (WiFi.status() == WL_CONNECTED) {
+    return;
+  }
+
+  Serial.printf("Conectando ao WiFi %s", WIFI_SSID);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_SENHA);
+
+  unsigned long inicio = millis();
+  while (WiFi.status() != WL_CONNECTED &amp;&amp; millis() - inicio &lt; 20000) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.printf("\nConectado. IP: %s\n", WiFi.localIP().toString().c_str());
+    return;
+  }
+
+  wl_status_t status = WiFi.status();
+  if (status == WL_NO_SSID_AVAIL) {
+    Serial.println("\nFalha no WiFi: rede nao encontrada (nome diferente ou rede 5 GHz)");
+  } else if (status == WL_WRONG_PASSWORD || status == WL_CONNECT_FAILED) {
+    Serial.println("\nFalha no WiFi: senha recusada");
+  } else {
+    Serial.printf("\nFalha no WiFi (status %d), tento de novo no proximo ciclo\n", status);
+  }
+  listarRedes();
+}
+
+// Mostra as redes que a placa enxerga (o ESP8266 so ve redes 2,4 GHz)
+void listarRedes() {
+  int total = WiFi.scanNetworks();
+  Serial.printf("Redes visiveis: %d\n", total);
+  for (int i = 0; i &lt; total; i++) {
+    Serial.printf("  \"%s\" sinal %d dBm\n", WiFi.SSID(i).c_str(), WiFi.RSSI(i));
+  }
+  WiFi.scanDelete();
+}
+
+// O Loki exige timestamp real (epoch em nanossegundos), por isso o relogio vem do NTP
+void sincronizarRelogio() {
+  configTime(0, 0, "a.st1.ntp.br", "pool.ntp.org");
+  Serial.print("Sincronizando relogio (NTP)");
+
+  unsigned long inicio = millis();
+  while (time(nullptr) &lt; 1700000000 &amp;&amp; millis() - inicio &lt; 20000) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println(time(nullptr) &lt; 1700000000 ? "\nNTP sem resposta (porta UDP 123 bloqueada?)" : "\nRelogio OK");
+}
+
+bool obterTimestampNs(char* destino, size_t tamanho) {
+  struct timeval agora;
+  gettimeofday(&amp;agora, nullptr);
+  if (agora.tv_sec &lt; 1700000000) {
+    return false;
+  }
+
+  snprintf(destino, tamanho, "%lu%06lu000", (unsigned long)agora.tv_sec, (unsigned long)agora.tv_usec);
+  return true;
+}
+
+void enviarParaLoki(float peso) {
+  char timestamp[24];
+  if (!obterTimestampNs(timestamp, sizeof(timestamp))) {
+    Serial.println("Relogio ainda sem NTP, leitura descartada");
+    sincronizarRelogio();
+    return;
+  }
+
+  char corpo[320];
+  snprintf(corpo, sizeof(corpo),
+    "{\"streams\":[{\"stream\":{\"service_name\":\"%s\",\"dispositivo\":\"%s\"},"
+    "\"values\":[[\"%s\",\"{\\\"peso\\\":%.3f,\\\"unidade\\\":\\\"kg\\\"}\"]]}]}",
+    SERVICO, DISPOSITIVO, timestamp, peso);
+
+  bool usaHttps = strncmp(URL_LOKI, "https", 5) == 0;
+  HTTPClient http;
+  http.setTimeout(5000);
+  if (usaHttps) {
+    clienteHttps.setInsecure();   // sem validar certificado; em producao fixe o fingerprint
+    http.begin(clienteHttps, URL_LOKI);
+  } else {
+    http.begin(clienteHttp, URL_LOKI);
+  }
+
+  http.addHeader("Content-Type", "application/json");
+  if (strlen(GRAFANA_TOKEN) &gt; 0) {
+    http.addHeader("Authorization", String("Bearer ") + GRAFANA_TOKEN);
+  } else if (strlen(GRAFANA_USUARIO) &gt; 0) {
+    http.setAuthorization(GRAFANA_USUARIO, GRAFANA_SENHA);
+  }
+  if (strlen(LOKI_TENANT) &gt; 0) {
+    http.addHeader("X-Scope-OrgID", LOKI_TENANT);
+  }
+
+  int codigo = http.POST((uint8_t*)corpo, strlen(corpo));
+  if (codigo == 204) {
+    Serial.println("Loki: 204 OK");
+  } else {
+    Serial.printf("Loki: %d %s\n", codigo, codigo &gt; 0 ? http.getString().c_str() : http.errorToString(codigo).c_str());
+    if (codigo == 401 || codigo == 403) {
+      Serial.println("  -&gt; Grafana recusou a credencial: confira o token e o papel da service account");
+    } else if (codigo == 404) {
+      Serial.println("  -&gt; Caminho nao existe: confira o endereco do Grafana e o UID do Loki na URL_LOKI");
+    }
+  }
+  http.end();
+}
+
+// Tara (zero) e fator gravados na memoria da placa: sobrevivem a queda de energia com a garrafa em cima
+struct CalibracaoGravada {
+  uint32_t marca;
+  long offset;
+  float fator;
+};
+const uint32_t MARCA_CALIBRACAO = 0xBA1A0002;
+
+void gravarCalibracao() {
+  CalibracaoGravada calibracao = { MARCA_CALIBRACAO, balanca.get_offset(), balanca.get_scale() };
+  EEPROM.put(0, calibracao);
+  EEPROM.commit();
+}
+
+bool carregarCalibracao() {
+  CalibracaoGravada calibracao;
+  EEPROM.get(0, calibracao);
+  if (calibracao.marca != MARCA_CALIBRACAO) {
+    return false;
+  }
+
+  balanca.set_offset(calibracao.offset);
+  balanca.set_scale(calibracao.fator);
+  Serial.printf("Calibracao carregada da memoria (fator %.1f)\n", calibracao.fator);
+  return true;
+}
+
+void fazerTara() {
+  Serial.println("Fazendo tara, deixe a balanca vazia...");
+  balanca.tare(20);
+  gravarCalibracao();
+  Serial.println("Tara feita e gravada");
+}
+
+// Com um peso conhecido em cima, calcula o fator que transforma a leitura do HX711 em kg (o sinal sai certo sozinho)
+void calibrar(float pesoRealKg) {
+  Serial.printf("Calibrando com %.3f kg em cima...\n", pesoRealKg);
+  double leitura = balanca.get_value(20);
+  if (fabs(leitura) &lt; 100) {
+    Serial.println("Leitura quase zero: o peso esta em cima? Faca a tara com a balanca vazia antes");
+    return;
+  }
+
+  balanca.set_scale(leitura / pesoRealKg);
+  gravarCalibracao();
+  Serial.printf("Calibrado e gravado (fator %.1f). Peso agora: %.3f kg\n", balanca.get_scale(), balanca.get_units(10));
+}
+
+// Comandos: botao FLASH ou "t" = tara; "c &lt;gramas&gt;" = calibrar com peso conhecido (ex.: c 1000); "r" = apagar a calibracao
+void verificarComandos() {
+  bool pediuTara = digitalRead(PINO_BOTAO_TARA) == LOW;
+  if (Serial.available() &gt; 0) {
+    String comando = Serial.readStringUntil('\n');
+    comando.trim();
+    if (comando.equalsIgnoreCase("t")) {
+      pediuTara = true;
+    } else if (comando.equalsIgnoreCase("r")) {
+      Serial.println("Apagando a calibracao gravada e voltando ao fator padrao");
+      balanca.set_scale(FATOR_CALIBRACAO);
+      pediuTara = true;
+    } else if (comando.startsWith("c") || comando.startsWith("C")) {
+      float gramas = comando.substring(1).toFloat();
+      if (gramas &gt; 0) {
+        calibrar(gramas / 1000.0f);
+      } else {
+        Serial.println("Use: c &lt;peso em gramas&gt;, ex.: c 1000");
+      }
+    }
+  }
+
+  if (!pediuTara) {
+    return;
+  }
+
+  fazerTara();
+  while (digitalRead(PINO_BOTAO_TARA) == LOW) {
+    delay(10);
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  delay(200);
+  Serial.println("\nBalanca ESP8266 -&gt; Loki");
+
+  EEPROM.begin(sizeof(CalibracaoGravada));
+  pinMode(PINO_BOTAO_TARA, INPUT_PULLUP);
+
+  balanca.begin(PINO_DT, PINO_SCK);
+  balanca.set_scale(FATOR_CALIBRACAO);
+  if (!carregarCalibracao()) {
+    fazerTara();   // primeira vez: a balanca precisa estar VAZIA
+    Serial.println("Ainda sem calibracao: coloque um peso conhecido e digite c &lt;gramas&gt;, ex.: c 1000");
+  }
+
+  conectarWifi();
+  sincronizarRelogio();
+}
+
+void loop() {
+  verificarComandos();
+
+  if (millis() - ultimoEnvio &lt; INTERVALO_ENVIO_MS) {
+    return;
+  }
+  ultimoEnvio = millis();
+
+  conectarWifi();
+  if (WiFi.status() != WL_CONNECTED) {
+    return;
+  }
+
+  if (!balanca.wait_ready_timeout(1000)) {
+    Serial.println("HX711 nao respondeu, confira DT/SCK e a alimentacao");
+    return;
+  }
+
+  double bruto = balanca.get_value(LEITURAS_POR_MEDIA);   // leitura do HX711 menos a tara; tem que mudar quando poe peso
+  float peso = bruto / balanca.get_scale();
+  Serial.printf("Peso: %.3f kg  (bruto %.0f, fator %.1f)\n", peso, bruto, balanca.get_scale());
+
+  enviarParaLoki(peso);
+}</code></pre>
+        </div>
+
+        <!-- ====================================================================
+             PORTUGUES
+             ==================================================================== -->
+        <div data-secao="pt" lang="pt-BR" hidden>
+
+          <h2>O problema</h2>
+          <p>
+            Quanto café ainda tem na garrafa térmica? Para responder isso sem levantar a tampa,
+            montei uma balança com um NodeMCU (ESP8266), um módulo HX711 e uma célula de carga.
+            Ela pesa a garrafa a cada 5 segundos e mostra o nível num painel do Grafana.
+          </p>
+          <p>
+            O peso vai direto do ESP8266 para o Grafana Loki, como uma linha de log em JSON. Não
+            precisei de API, banco de dados nem servidor novo: o Loki que já guardava os logs das
+            aplicações passou a guardar também o peso do café.
+          </p>
+          <p>
+            Neste post está o caminho completo: componentes, ligações, preparação da Arduino IDE,
+            o request para o Loki, o código, a tara e a calibração, o dashboard e os problemas
+            que apareceram no caminho.
+          </p>
+
+          <h2>Arquitetura</h2>
+<pre><code>Célula de carga -&gt; HX711 -&gt; NodeMCU (ESP8266) -&gt; Wi-Fi -&gt; Grafana (proxy de data source) -&gt; Loki
+                                                           Grafana (dashboard)    &lt;- LogQL -- Loki</code></pre>
+          <p>
+            O ESP8266 não alcança o Loki, que só existe dentro do cluster. Ele envia o peso ao
+            Grafana, que repassa o push ao Loki e depois lê o mesmo dado para montar o dashboard.
+          </p>
+
+          <h2>Componentes</h2>
+          <p>
+            O projeto começou com um Arduino lendo o HX711, mas o NodeMCU lê o HX711 direto e
+            ainda tem Wi-Fi, então o Arduino saiu da montagem.
+          </p>
+          <div class="tabela-rolagem">
+            <table class="tabela">
+              <thead>
+                <tr><th>Peça</th><th>Para que serve</th><th>Observação</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>NodeMCU 1.0 (ESP-12E, chip USB CP2102)</td><td>Lê o HX711, conecta no Wi-Fi e envia o peso</td><td>Tem USB, regulador de 3,3 V e pinos de sobra</td></tr>
+                <tr><td>Módulo HX711</td><td>Amplifica o sinal da célula e converte em número (ADC de 24 bits)</td><td>Alimentado em 3,3 V, igual ao ESP</td></tr>
+                <tr><td>Célula de carga em barra (80 &times; 12,7 &times; 12,7 mm)</td><td>Mede o peso pela deformação do alumínio</td><td>Capacidade acima da garrafa cheia, com folga para quem aperta a bomba</td></tr>
+                <tr><td>Protoboard e jumpers</td><td>Ligações sem solda</td><td>Fio solto aqui é a causa mais comum de leitura parada</td></tr>
+                <tr><td>Cabo micro-USB de dados</td><td>Gravar o firmware e ver o monitor serial</td><td>Cabo só de carga liga a placa, mas o PC não a enxerga</td></tr>
+                <tr><td>Carregador USB 5 V</td><td>Alimentar a balança no dia a dia</td><td>Depois de gravada, a placa não precisa de PC</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2>Ligações</h2>
+          <p>São 8 fios: 4 da célula para o HX711 e 4 do HX711 para o NodeMCU.</p>
+
+          <h3>Célula de carga &rarr; HX711</h3>
+          <div class="tabela-rolagem">
+            <table class="tabela">
+              <thead>
+                <tr><th>Fio da célula</th><th>HX711</th><th>Função</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Vermelho</td><td>E+</td><td>Excitação +</td></tr>
+                <tr><td>Preto</td><td>E&minus;</td><td>Excitação &minus;</td></tr>
+                <tr><td>Branco</td><td>A&minus;</td><td>Sinal &minus;</td></tr>
+                <tr><td>Verde</td><td>A+</td><td>Sinal +</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>HX711 &rarr; NodeMCU</h3>
+          <div class="tabela-rolagem">
+            <table class="tabela">
+              <thead>
+                <tr><th>HX711</th><th>NodeMCU</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>VCC</td><td>3V3</td></tr>
+                <tr><td>GND</td><td>GND</td></tr>
+                <tr><td>DT</td><td>D5 (GPIO14)</td></tr>
+                <tr><td>SCK</td><td>D6 (GPIO12)</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p>Três cuidados:</p>
+          <ul>
+            <li><strong>Alimente o HX711 em 3,3 V, não em 5 V.</strong> Assim o nível lógico do DT bate com o do ESP8266.</li>
+            <li><strong>Evite D3, D4 e D8 para o HX711.</strong> Esses pinos definem o modo de boot da placa e podem impedir que ela ligue.</li>
+            <li><strong>Sinal invertido não é defeito.</strong> Se o número cai quando você põe peso, troque o branco com o verde ou deixe a calibração resolver o sinal (mais abaixo).</li>
+          </ul>
+
+          <h2>Preparando o ambiente</h2>
+          <p>Tudo roda na Arduino IDE 2. A placa ESP8266 e a biblioteca do HX711 são instaladas pela própria IDE.</p>
+          <ol>
+            <li>Em <em>Arquivo &rarr; Preferências</em>, no campo <em>URLs adicionais do Gerenciador de Placas</em>, cole <code>https://arduino.esp8266.com/stable/package_esp8266com_index.json</code>.</li>
+            <li>No Gerenciador de Placas, instale <strong>esp8266 by ESP8266 Community</strong>.</li>
+            <li>No Gerenciador de Bibliotecas, instale <strong>HX711 Arduino Library by Bogdan Necula</strong>. Outras bibliotecas com nome parecido (como a <code>HX711_ADC</code>) têm outra API e o sketch não compila com elas.</li>
+            <li>Em <em>Ferramentas &rarr; Placa</em>, escolha <strong>NodeMCU 1.0 (ESP-12E Module)</strong>.</li>
+            <li>Plugue a placa e escolha em <em>Ferramentas &rarr; Porta</em> a porta que apareceu, chamada <code>Silicon Labs CP210x USB to UART Bridge (COMx)</code>.</li>
+            <li>Abra o Monitor Serial em 115200.</li>
+          </ol>
+          <blockquote>
+            Se nenhuma porta nova aparecer, o problema quase sempre é o cabo: muitos cabos
+            micro-USB só carregam. Se a placa aparecer no Gerenciador de Dispositivos com um
+            ícone de alerta, falta o driver <strong>CP210x Universal Windows Driver</strong> da
+            Silicon Labs. Instalar driver exige administrador no Windows; sem essa permissão,
+            peça à TI ou grave a placa em outro computador.
+          </blockquote>
+          <p>
+            Portas COM chamadas &ldquo;Serial Padrão por link Bluetooth&rdquo; são do Bluetooth
+            do notebook, não da placa. E os caracteres estranhos no início do monitor serial são
+            normais: são mensagens do boot do ESP8266, que usam outra velocidade.
+          </p>
+
+          <h2>Por que Loki e não uma API com banco</h2>
+          <p>
+            O Loki é um banco de logs, mas guarda números muito bem quando eles vêm dentro de uma
+            linha em JSON. Com o operador <code>unwrap</code> da LogQL, o Grafana transforma o
+            campo <code>peso</code> de cada linha numa série numérica, pronta para virar gráfico.
+            Como ele já existia na empresa para os logs das aplicações, o caminho ficou bem mais
+            curto.
+          </p>
+          <div class="tabela-rolagem">
+            <table class="tabela">
+              <thead>
+                <tr><th></th><th>Loki direto</th><th>API + banco</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>O que precisa criar</td><td>Nada: só o POST do ESP</td><td>Endpoint, tabela, deploy</td></tr>
+                <tr><td>Como o Grafana lê</td><td>Data source Loki já existente + LogQL</td><td>Data source do banco + SQL</td></tr>
+                <tr><td>Histórico</td><td>Só pelo período de retenção do Loki</td><td>Pelo tempo que quiser</td></tr>
+                <tr><td>Regras de negócio (alerta, tara no servidor)</td><td>Ficam no ESP ou no Grafana</td><td>Ficam na API</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Para saber quanto café tem agora, a retenção do Loki não é problema. Se um dia o
+            histórico importar (&ldquo;quantas garrafas por semana?&rdquo;), vale migrar para
+            API + banco.
+          </p>
+          <p>
+            Um cuidado de modelagem: <strong>o peso vai no corpo da linha, nunca em
+            label</strong>. Labels identificam o stream (<code>service_name="balanca"</code>,
+            <code>dispositivo="balanca-01"</code>) e precisam ter poucos valores. Um peso como
+            label criaria um stream novo a cada leitura e pesaria no Loki.
+          </p>
+
+          <h2>Chegando no Loki pelo Grafana</h2>
+          <p>
+            O ESP8266 não fala com o Loki direto: ele manda o push para o Grafana, que repassa ao
+            Loki pelo proxy de data source. Isso foi necessário porque, na fonte de dados do
+            Grafana, a URL do Loki era um nome interno do Kubernetes:
+          </p>
+<pre><code>http://loki-gateway.&lt;namespace&gt;.svc.cluster.local:80</code></pre>
+          <p>
+            Nomes <code>*.svc.cluster.local</code> só existem dentro do cluster. O Grafana, que
+            roda lá dentro, alcança o Loki; uma placa no Wi-Fi do escritório, não. Em vez de
+            pedir para expor o Loki, usei a rota de proxy que o próprio Grafana oferece:
+          </p>
+<pre><code>https://&lt;seu-grafana&gt;/api/datasources/proxy/uid/&lt;uid-do-loki&gt;/loki/api/v1/push</code></pre>
+          <div class="tabela-rolagem">
+            <table class="tabela">
+              <thead>
+                <tr><th>Peça</th><th>Onde pegar</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>&lt;seu-grafana&gt;</code></td><td>O endereço que você usa no navegador</td></tr>
+                <tr><td><code>&lt;uid-do-loki&gt;</code></td><td>No Explore, o <code>"uid"</code> da fonte de dados dentro do link; ou no final da URL de <em>Connections &rarr; Data sources &rarr; Loki</em></td></tr>
+                <tr><td>Token</td><td><em>Administration &rarr; Users and access &rarr; Service accounts</em>: crie uma service account com papel <strong>Viewer</strong> e gere um token (<code>glsa_...</code>)</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            No teste, o papel Viewer foi suficiente para gravar pelo proxy. Também não foi
+            preciso mandar o header de tenant (<code>X-Scope-OrgID</code>): se a fonte de dados
+            tiver um configurado, o Grafana o acrescenta sozinho no repasse.
+          </p>
+          <blockquote>
+            Use o token, não usuário e senha. Tudo o que está no firmware pode ser lido da
+            memória da placa por quem tiver acesso físico a ela, e um token de Viewer exposto
+            causa muito menos estrago que a senha de um admin.
+          </blockquote>
+
+          <h2>O request</h2>
+          <p>
+            Cada leitura é um POST com um stream e uma linha. Os labels ficam em
+            <code>stream</code>, e em <code>values</code> vai um par: o timestamp em
+            nanossegundos (como string) e a linha de log, que aqui é um JSON com o peso.
+          </p>
+<pre><code>{
+  "streams": [{
+    "stream": { "service_name": "balanca", "dispositivo": "balanca-01" },
+    "values": [[ "1793298680116673000", "{\"peso\":2.345,\"unidade\":\"kg\"}" ]]
+  }]
+}</code></pre>
+          <p>
+            O Loki exige o timestamp. O ESP8266 não tem relógio de verdade, então ele sincroniza
+            a hora por NTP ao ligar (<code>configTime</code> com <code>a.st1.ntp.br</code> e
+            <code>pool.ntp.org</code>), e o código descarta a leitura enquanto o relógio não
+            estiver certo. Se a rede bloquear a porta UDP 123, nada chega ao Loki.
+          </p>
+          <p>Antes de gravar a placa, dá para testar o caminho inteiro pelo notebook:</p>
+<pre><code>curl -s -o /dev/null -w "%{http_code}\n" -X POST \
+  "https://&lt;seu-grafana&gt;/api/datasources/proxy/uid/&lt;uid-do-loki&gt;/loki/api/v1/push" \
+  -H "Authorization: Bearer &lt;token&gt;" -H "Content-Type: application/json" \
+  -d "{\"streams\":[{\"stream\":{\"service_name\":\"balanca\",\"dispositivo\":\"balanca-teste\"},\"values\":[[\"$(date +%s)000000000\",\"{\\\"peso\\\":1.0}\"]]}]}"</code></pre>
+          <div class="tabela-rolagem">
+            <table class="tabela">
+              <thead>
+                <tr><th>Resposta</th><th>Significado</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>204</td><td>Gravou. O Loki não devolve corpo no sucesso</td></tr>
+                <tr><td>401</td><td>Token ausente ou errado</td></tr>
+                <tr><td>403</td><td>O papel da service account não permite. Troque Viewer por Editor</td></tr>
+                <tr><td>404</td><td>Endereço do Grafana ou UID da fonte de dados errado</td></tr>
+                <tr><td>400 com &ldquo;no org id&rdquo;</td><td>O Loki usa tenant e a fonte de dados não o configura. Mande o <code>X-Scope-OrgID</code></td></tr>
+                <tr><td>Timeout</td><td>O endereço não é acessível daquela rede</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2>O código</h2>
+          <p>
+            O sketch tem cerca de 280 linhas e faz uma coisa por função. O <code>loop()</code>
+            roda o ciclo a cada 5 segundos: confere comandos de tara, garante o Wi-Fi, lê o HX711
+            e envia. O código completo está no fim do post.
+          </p>
+          <div class="tabela-rolagem">
+            <table class="tabela">
+              <thead>
+                <tr><th>Função</th><th>O que faz</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>conectarWifi()</code></td><td>Conecta e, se falhar, diz o motivo: rede não encontrada (nome errado ou 5 GHz) ou senha recusada</td></tr>
+                <tr><td><code>listarRedes()</code></td><td>Lista as redes que a placa enxerga, entre aspas, para copiar o nome exato</td></tr>
+                <tr><td><code>sincronizarRelogio()</code></td><td>Acerta a hora por NTP; sem ela o Loki recusa a leitura</td></tr>
+                <tr><td><code>obterTimestampNs()</code></td><td>Monta o timestamp em nanossegundos</td></tr>
+                <tr><td><code>enviarParaLoki()</code></td><td>Monta o JSON e faz o POST HTTPS com o token</td></tr>
+                <tr><td><code>fazerTara()</code> / <code>calibrar()</code></td><td>Definem o zero e o fator, e gravam os dois na memória</td></tr>
+                <tr><td><code>verificarComandos()</code></td><td>Atende o botão FLASH e os comandos do monitor serial</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            O timestamp sai de <code>gettimeofday</code>. Os segundos ficam na frente, os
+            microssegundos com 6 dígitos e três zeros no fim, o que dá nanossegundos sem precisar
+            de inteiro de 64 bits:
+          </p>
+<pre><code>struct timeval agora;
+gettimeofday(&amp;agora, nullptr);
+snprintf(destino, tamanho, "%lu%06lu000", (unsigned long)agora.tv_sec, (unsigned long)agora.tv_usec);</code></pre>
+          <p>
+            O envio usa o <code>HTTPClient</code> com o cliente TLS do BearSSL. O
+            <code>setInsecure()</code> aceita o certificado sem validar, o que basta para um
+            teste interno; num ambiente exposto, fixe o fingerprint do certificado.
+          </p>
+<pre><code>clienteHttps.setInsecure();
+http.begin(clienteHttps, URL_LOKI);
+http.addHeader("Content-Type", "application/json");
+http.addHeader("Authorization", String("Bearer ") + GRAFANA_TOKEN);
+int codigo = http.POST((uint8_t*)corpo, strlen(corpo));   // 204 = gravou</code></pre>
+          <p>Com tudo certo, o monitor serial mostra uma linha por ciclo (valores de exemplo):</p>
+<pre><code>Conectado. IP: 192.168.0.25
+Relogio OK
+Peso: 2.345 kg  (bruto 133912, fator 57104.3)
+Loki: 204 OK</code></pre>
+
+          <h2>Tara e calibração</h2>
+          <p>
+            O HX711 não devolve quilos: devolve um número cru, e o peso sai de duas constantes. A
+            <strong>tara</strong> é o offset, o número cru com a balança vazia. A
+            <strong>calibração</strong> é o fator, quantas unidades cruas valem 1 kg.
+          </p>
+<pre><code>peso (kg) = (leitura - offset) / fator</code></pre>
+          <p>
+            Na biblioteca, <code>tare()</code> mede o offset, <code>set_scale()</code> define o
+            fator, <code>get_value()</code> devolve <code>leitura &minus; offset</code> e
+            <code>get_units()</code> já divide pelo fator.
+          </p>
+          <p>
+            Aqui eu errei antes de acertar. As primeiras leituras pareciam gramas com sinal
+            negativo, e a primeira ideia foi dividir por &minus;1000. Uma lata de 350 ml cheia,
+            com uns 0,37 kg, apareceu como 0,003 kg. O problema era o fator: o
+            <code>-7050</code> do código era um valor de exemplo de tutorial, não o da minha
+            célula. Cada célula tem o seu fator, e o jeito certo é medir:
+          </p>
+<pre><code>void calibrar(float pesoRealKg) {
+  double leitura = balanca.get_value(20);    // média de 20 leituras, já sem a tara
+  balanca.set_scale(leitura / pesoRealKg);   // o sinal do fator sai certo sozinho
+  gravarCalibracao();
+}</code></pre>
+          <p>O sketch aceita comandos pelo monitor serial e pelo botão FLASH da própria placa, sem fio extra:</p>
+          <div class="tabela-rolagem">
+            <table class="tabela">
+              <thead>
+                <tr><th>Comando</th><th>Quando usar</th><th>O que faz</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>t</code> ou segurar o FLASH</td><td>Balança vazia</td><td>Faz a tara</td></tr>
+                <tr><td><code>c 1000</code></td><td>Com 1000 g em cima</td><td>Calcula o fator</td></tr>
+                <tr><td><code>r</code></td><td>Calibração errada gravada</td><td>Volta ao fator padrão e refaz a tara</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>O passo a passo da primeira vez:</p>
+          <ol>
+            <li>Ligue com o prato vazio e digite <code>t</code>.</li>
+            <li>Coloque um peso conhecido, de preferência um pacote fechado de 1 kg (lata tem peso mais incerto), e digite <code>c 1000</code>.</li>
+            <li>Tire o pacote e confira com outro objeto de peso conhecido.</li>
+          </ol>
+          <p>
+            Offset e fator ficam gravados na EEPROM, junto com um número-marca que indica que a
+            gravação é válida. Isso resolve um problema real: com a tara feita só no boot, uma
+            queda de energia com a garrafa em cima zeraria o peso dela. Agora a placa religa com
+            a calibração gravada, e só faz a tara sozinha na primeira vez.
+          </p>
+          <p>
+            Dois cuidados: não segure o FLASH na hora de ligar a placa, porque isso a coloca em
+            modo de gravação; e refaça a tara sempre que mexer na montagem.
+          </p>
+
+          <h2>Mostrando no Grafana</h2>
+          <p>
+            O dado chega no Loki como log, e três queries LogQL resolvem tudo. Para conferir se
+            está chegando, abra o Explore, escolha a fonte de dados Loki e rode:
+          </p>
+<pre><code>{service_name="balanca", dispositivo="balanca-01"}</code></pre>
+          <p>
+            Deve aparecer uma linha nova a cada 5 segundos, com o JSON do peso. Para virar
+            número, <code>| json peso</code> extrai o campo e <code>| unwrap peso</code>
+            transforma em valor:
+          </p>
+          <div class="tabela-rolagem">
+            <table class="tabela">
+              <thead>
+                <tr><th>Painel</th><th>Query</th><th>Tipo</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Peso atual</td><td><code>last_over_time({service_name="balanca", dispositivo="$dispositivo"} | json peso | unwrap peso [1m])</code></td><td>Stat, consulta instantânea</td></tr>
+                <tr><td>Nível</td><td>a mesma</td><td>Bar gauge vertical, de 0 a 5 kg</td></tr>
+                <tr><td>Histórico (opcional)</td><td><code>avg_over_time({service_name="balanca", dispositivo="$dispositivo"} | json peso | unwrap peso [$__interval])</code></td><td>Time series</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            O dashboard final tem o peso atual e uma coluna larga que sobe e desce com o peso. O
+            histórico ficou de fora, porque a pergunta é &ldquo;quanto tem agora&rdquo;. A coluna
+            é um Bar gauge com orientação vertical e cores por faixa de peso (vermelho, amarelo,
+            verde). A janela <code>[1m]</code> faz o painel mostrar &ldquo;Sem leitura&rdquo;
+            quando a balança fica mais de um minuto sem enviar, o que denuncia placa desligada ou
+            sem rede.
+          </p>
+          <p>
+            O dashboard é um JSON importável (<em>Dashboards &rarr; New &rarr; Import</em>), com
+            duas variáveis: a fonte de dados Loki e o <code>dispositivo</code>, preenchido com os
+            valores do label (<code>label_values({service_name="balanca"}, dispositivo)</code>).
+            Com mais de uma balança, basta mudar o <code>DISPOSITIVO</code> no sketch de cada
+            uma.
+          </p>
+          <p>
+            Como a balança pesa garrafa + café, a garrafa vazia já ocupa um pedaço da barra. Para
+            a barra ir de &ldquo;vazia&rdquo; a &ldquo;cheia&rdquo;, ajuste o mínimo e o máximo
+            do painel para o peso da garrafa vazia e da garrafa cheia.
+          </p>
+
+          <h2>Problemas que encontramos</h2>
+          <p>Quase nenhum problema foi de código: cabo, driver, rede e calibração tomaram mais tempo que o sketch.</p>
+          <div class="tabela-rolagem">
+            <table class="tabela">
+              <thead>
+                <tr><th>Problema</th><th>Sintoma</th><th>Solução</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Cabo só de carga</td><td>A placa liga (o LED azul pisca no reset), mas o Windows não mostra porta nova</td><td>Cabo de dados, como o de um celular que transfere arquivos</td></tr>
+                <tr><td>Driver sem permissão</td><td>Aparece &ldquo;CP2102 USB to UART Bridge Controller&rdquo; com erro 28</td><td>Driver CP210x instalado pela TI, ou gravar em outro PC</td></tr>
+                <tr><td>Portas que não são da placa</td><td>COM3 a COM6 listadas como &ldquo;Serial Padrão por link Bluetooth&rdquo;</td><td>Ignorar; a da placa aparece só ao plugá-la</td></tr>
+                <tr><td>Rede só em 5 GHz</td><td>&ldquo;Rede não encontrada&rdquo;, e a rede não aparece no <code>listarRedes()</code></td><td>Rede de 2,4 GHz (a de IoT da empresa) ou hotspot do celular em 2,4 GHz</td></tr>
+                <tr><td>Segurança WPA3</td><td>A placa não conecta</td><td>WPA2-Personal, ou o modo misto WPA2/WPA3</td></tr>
+                <tr><td>Loki interno do cluster</td><td><code>*.svc.cluster.local</code> não resolve fora do cluster</td><td>Push pelo proxy de data source do Grafana</td></tr>
+                <tr><td>Fator de calibração de exemplo</td><td>Leitura parecendo gramas negativas; lata de 0,37 kg lida como 0,003 kg</td><td>Calibrar com peso conhecido (<code>c 1000</code>), sem conversões fixas no código</td></tr>
+                <tr><td>Peso travado em 0,000</td><td>O número não muda com peso em cima</td><td>Olhar o bruto no monitor: parado = fio solto; mudando = calibração ruim gravada (<code>r</code> e calibrar de novo)</td></tr>
+                <tr><td>Senha no firmware</td><td>Senha de admin do Grafana gravada na placa</td><td>Token de service account com papel Viewer</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h2>Próximos passos</h2>
+          <ul>
+            <li><strong>Atualização pelo Wi-Fi (OTA).</strong> Depois da primeira gravação por cabo, as próximas iriam pela rede, sem depender de cabo e driver.</li>
+            <li><strong>Filtrar o aperto da bomba.</strong> Quem serve café empurra a garrafa para baixo, e a leitura daquele instante não vale. Leituras acima do peso da garrafa cheia podem ser descartadas no ESP.</li>
+            <li><strong>Alerta de café acabando.</strong> Uma regra no Grafana quando o peso ficar perto do peso da garrafa vazia.</li>
+            <li><strong>Validar o certificado.</strong> Trocar o <code>setInsecure()</code> pelo fingerprint do certificado do Grafana.</li>
+          </ul>
+
+          <h2>Código completo</h2>
+          <p>Troque os valores em maiúsculas do bloco de configuração antes de gravar. O resto funciona como está.</p>
+<pre><code>// Balanca: celula de carga -&gt; HX711 -&gt; NodeMCU (ESP8266) -&gt; Wi-Fi -&gt; Grafana (proxy) -&gt; Loki
+// Placa: "NodeMCU 1.0 (ESP-12E Module)" | Biblioteca: "HX711 Arduino Library" (Bogdan Necula)
+// Ligacao: HX711 VCC-&gt;3V3, GND-&gt;GND, DT-&gt;D5, SCK-&gt;D6
+
+#include &lt;ESP8266WiFi.h&gt;
+#include &lt;ESP8266HTTPClient.h&gt;
+#include &lt;WiFiClientSecureBearSSL.h&gt;
+#include &lt;time.h&gt;
+#include &lt;sys/time.h&gt;
+#include &lt;EEPROM.h&gt;
+#include "HX711.h"
+
+// ===================== Configuracao =====================
+const char* WIFI_SSID = "SEU_WIFI";   // rede de 2,4 GHz
+const char* WIFI_SENHA = "SUA_SENHA";
+
+// Push pelo proxy de data source do Grafana, que repassa para o Loki interno do cluster
+// Formato: https://&lt;grafana&gt;/api/datasources/proxy/uid/&lt;uid do data source Loki&gt;/loki/api/v1/push
+const char* URL_LOKI = "https://SEU_GRAFANA/api/datasources/proxy/uid/UID_DO_LOKI/loki/api/v1/push";
+
+// Autenticacao no Grafana: prefira o token de service account; o usuario/senha so e usado sem token
+const char* GRAFANA_TOKEN = "glsa_SEU_TOKEN";   // Administration &gt; Users and access &gt; Service accounts &gt; Add token
+const char* GRAFANA_USUARIO = "";
+const char* GRAFANA_SENHA = "";
+const char* LOKI_TENANT = "";   // header X-Scope-OrgID, so se o Loki for multi-tenant
+
+// Labels do stream no Loki (mantenha fixos: o peso vai na linha, nunca em label)
+const char* SERVICO = "balanca";
+const char* DISPOSITIVO = "balanca-01";
+
+const int PINO_DT = D5;
+const int PINO_SCK = D6;
+const float FATOR_CALIBRACAO = -7050.0f;   // so vale ate calibrar pelo monitor serial ("c &lt;gramas&gt;"); depois fica gravado na placa
+const int PINO_BOTAO_TARA = 0;             // botao FLASH da propria NodeMCU
+const int LEITURAS_POR_MEDIA = 10;
+const unsigned long INTERVALO_ENVIO_MS = 5000;
+// ========================================================
+
+HX711 balanca;
+WiFiClient clienteHttp;
+BearSSL::WiFiClientSecure clienteHttps;
+unsigned long ultimoEnvio = 0;
+
+void conectarWifi() {
+  if (WiFi.status() == WL_CONNECTED) {
+    return;
+  }
+
+  Serial.printf("Conectando ao WiFi %s", WIFI_SSID);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_SENHA);
+
+  unsigned long inicio = millis();
+  while (WiFi.status() != WL_CONNECTED &amp;&amp; millis() - inicio &lt; 20000) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.printf("\nConectado. IP: %s\n", WiFi.localIP().toString().c_str());
+    return;
+  }
+
+  wl_status_t status = WiFi.status();
+  if (status == WL_NO_SSID_AVAIL) {
+    Serial.println("\nFalha no WiFi: rede nao encontrada (nome diferente ou rede 5 GHz)");
+  } else if (status == WL_WRONG_PASSWORD || status == WL_CONNECT_FAILED) {
+    Serial.println("\nFalha no WiFi: senha recusada");
+  } else {
+    Serial.printf("\nFalha no WiFi (status %d), tento de novo no proximo ciclo\n", status);
+  }
+  listarRedes();
+}
+
+// Mostra as redes que a placa enxerga (o ESP8266 so ve redes 2,4 GHz)
+void listarRedes() {
+  int total = WiFi.scanNetworks();
+  Serial.printf("Redes visiveis: %d\n", total);
+  for (int i = 0; i &lt; total; i++) {
+    Serial.printf("  \"%s\" sinal %d dBm\n", WiFi.SSID(i).c_str(), WiFi.RSSI(i));
+  }
+  WiFi.scanDelete();
+}
+
+// O Loki exige timestamp real (epoch em nanossegundos), por isso o relogio vem do NTP
+void sincronizarRelogio() {
+  configTime(0, 0, "a.st1.ntp.br", "pool.ntp.org");
+  Serial.print("Sincronizando relogio (NTP)");
+
+  unsigned long inicio = millis();
+  while (time(nullptr) &lt; 1700000000 &amp;&amp; millis() - inicio &lt; 20000) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  Serial.println(time(nullptr) &lt; 1700000000 ? "\nNTP sem resposta (porta UDP 123 bloqueada?)" : "\nRelogio OK");
+}
+
+bool obterTimestampNs(char* destino, size_t tamanho) {
+  struct timeval agora;
+  gettimeofday(&amp;agora, nullptr);
+  if (agora.tv_sec &lt; 1700000000) {
+    return false;
+  }
+
+  snprintf(destino, tamanho, "%lu%06lu000", (unsigned long)agora.tv_sec, (unsigned long)agora.tv_usec);
+  return true;
+}
+
+void enviarParaLoki(float peso) {
+  char timestamp[24];
+  if (!obterTimestampNs(timestamp, sizeof(timestamp))) {
+    Serial.println("Relogio ainda sem NTP, leitura descartada");
+    sincronizarRelogio();
+    return;
+  }
+
+  char corpo[320];
+  snprintf(corpo, sizeof(corpo),
+    "{\"streams\":[{\"stream\":{\"service_name\":\"%s\",\"dispositivo\":\"%s\"},"
+    "\"values\":[[\"%s\",\"{\\\"peso\\\":%.3f,\\\"unidade\\\":\\\"kg\\\"}\"]]}]}",
+    SERVICO, DISPOSITIVO, timestamp, peso);
+
+  bool usaHttps = strncmp(URL_LOKI, "https", 5) == 0;
+  HTTPClient http;
+  http.setTimeout(5000);
+  if (usaHttps) {
+    clienteHttps.setInsecure();   // sem validar certificado; em producao fixe o fingerprint
+    http.begin(clienteHttps, URL_LOKI);
+  } else {
+    http.begin(clienteHttp, URL_LOKI);
+  }
+
+  http.addHeader("Content-Type", "application/json");
+  if (strlen(GRAFANA_TOKEN) &gt; 0) {
+    http.addHeader("Authorization", String("Bearer ") + GRAFANA_TOKEN);
+  } else if (strlen(GRAFANA_USUARIO) &gt; 0) {
+    http.setAuthorization(GRAFANA_USUARIO, GRAFANA_SENHA);
+  }
+  if (strlen(LOKI_TENANT) &gt; 0) {
+    http.addHeader("X-Scope-OrgID", LOKI_TENANT);
+  }
+
+  int codigo = http.POST((uint8_t*)corpo, strlen(corpo));
+  if (codigo == 204) {
+    Serial.println("Loki: 204 OK");
+  } else {
+    Serial.printf("Loki: %d %s\n", codigo, codigo &gt; 0 ? http.getString().c_str() : http.errorToString(codigo).c_str());
+    if (codigo == 401 || codigo == 403) {
+      Serial.println("  -&gt; Grafana recusou a credencial: confira o token e o papel da service account");
+    } else if (codigo == 404) {
+      Serial.println("  -&gt; Caminho nao existe: confira o endereco do Grafana e o UID do Loki na URL_LOKI");
+    }
+  }
+  http.end();
+}
+
+// Tara (zero) e fator gravados na memoria da placa: sobrevivem a queda de energia com a garrafa em cima
+struct CalibracaoGravada {
+  uint32_t marca;
+  long offset;
+  float fator;
+};
+const uint32_t MARCA_CALIBRACAO = 0xBA1A0002;
+
+void gravarCalibracao() {
+  CalibracaoGravada calibracao = { MARCA_CALIBRACAO, balanca.get_offset(), balanca.get_scale() };
+  EEPROM.put(0, calibracao);
+  EEPROM.commit();
+}
+
+bool carregarCalibracao() {
+  CalibracaoGravada calibracao;
+  EEPROM.get(0, calibracao);
+  if (calibracao.marca != MARCA_CALIBRACAO) {
+    return false;
+  }
+
+  balanca.set_offset(calibracao.offset);
+  balanca.set_scale(calibracao.fator);
+  Serial.printf("Calibracao carregada da memoria (fator %.1f)\n", calibracao.fator);
+  return true;
+}
+
+void fazerTara() {
+  Serial.println("Fazendo tara, deixe a balanca vazia...");
+  balanca.tare(20);
+  gravarCalibracao();
+  Serial.println("Tara feita e gravada");
+}
+
+// Com um peso conhecido em cima, calcula o fator que transforma a leitura do HX711 em kg (o sinal sai certo sozinho)
+void calibrar(float pesoRealKg) {
+  Serial.printf("Calibrando com %.3f kg em cima...\n", pesoRealKg);
+  double leitura = balanca.get_value(20);
+  if (fabs(leitura) &lt; 100) {
+    Serial.println("Leitura quase zero: o peso esta em cima? Faca a tara com a balanca vazia antes");
+    return;
+  }
+
+  balanca.set_scale(leitura / pesoRealKg);
+  gravarCalibracao();
+  Serial.printf("Calibrado e gravado (fator %.1f). Peso agora: %.3f kg\n", balanca.get_scale(), balanca.get_units(10));
+}
+
+// Comandos: botao FLASH ou "t" = tara; "c &lt;gramas&gt;" = calibrar com peso conhecido (ex.: c 1000); "r" = apagar a calibracao
+void verificarComandos() {
+  bool pediuTara = digitalRead(PINO_BOTAO_TARA) == LOW;
+  if (Serial.available() &gt; 0) {
+    String comando = Serial.readStringUntil('\n');
+    comando.trim();
+    if (comando.equalsIgnoreCase("t")) {
+      pediuTara = true;
+    } else if (comando.equalsIgnoreCase("r")) {
+      Serial.println("Apagando a calibracao gravada e voltando ao fator padrao");
+      balanca.set_scale(FATOR_CALIBRACAO);
+      pediuTara = true;
+    } else if (comando.startsWith("c") || comando.startsWith("C")) {
+      float gramas = comando.substring(1).toFloat();
+      if (gramas &gt; 0) {
+        calibrar(gramas / 1000.0f);
+      } else {
+        Serial.println("Use: c &lt;peso em gramas&gt;, ex.: c 1000");
+      }
+    }
+  }
+
+  if (!pediuTara) {
+    return;
+  }
+
+  fazerTara();
+  while (digitalRead(PINO_BOTAO_TARA) == LOW) {
+    delay(10);
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  delay(200);
+  Serial.println("\nBalanca ESP8266 -&gt; Loki");
+
+  EEPROM.begin(sizeof(CalibracaoGravada));
+  pinMode(PINO_BOTAO_TARA, INPUT_PULLUP);
+
+  balanca.begin(PINO_DT, PINO_SCK);
+  balanca.set_scale(FATOR_CALIBRACAO);
+  if (!carregarCalibracao()) {
+    fazerTara();   // primeira vez: a balanca precisa estar VAZIA
+    Serial.println("Ainda sem calibracao: coloque um peso conhecido e digite c &lt;gramas&gt;, ex.: c 1000");
+  }
+
+  conectarWifi();
+  sincronizarRelogio();
+}
+
+void loop() {
+  verificarComandos();
+
+  if (millis() - ultimoEnvio &lt; INTERVALO_ENVIO_MS) {
+    return;
+  }
+  ultimoEnvio = millis();
+
+  conectarWifi();
+  if (WiFi.status() != WL_CONNECTED) {
+    return;
+  }
+
+  if (!balanca.wait_ready_timeout(1000)) {
+    Serial.println("HX711 nao respondeu, confira DT/SCK e a alimentacao");
+    return;
+  }
+
+  double bruto = balanca.get_value(LEITURAS_POR_MEDIA);   // leitura do HX711 menos a tara; tem que mudar quando poe peso
+  float peso = bruto / balanca.get_scale();
+  Serial.printf("Peso: %.3f kg  (bruto %.0f, fator %.1f)\n", peso, bruto, balanca.get_scale());
+
+  enviarParaLoki(peso);
+}</code></pre>
+        </div>
+
+        <hr>
+        <p class="post__voltar"><a href="../index.html">Back to the list</a></p>
+      </article>
+    </div>
+  </div>
+
+  <script src="../js/dados-posts.js"></script>
+  <script src="../js/componentes.js"></script>
+</body>
+</html>

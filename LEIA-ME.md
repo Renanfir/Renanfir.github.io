@@ -77,7 +77,7 @@ delas ele aparece. Para criar uma aba nova:
 |---|---|
 | `<blog-barra-lateral>` | avatar + links de navegacao e contato |
 | `<blog-lista-posts>` | lista numerada com titulo e data (a de `atualizado`, se houver); `secao="<id>"` filtra a aba |
-| `<blog-filtro>` | abas que alternam os blocos com `data-secao` |
+| `<blog-filtro>` | abas que alternam os blocos com `data-secao`; com `secoes="en:English,pt:Português"` usa abas proprias, limitadas ao elemento pai (seletor de idioma de um post) |
 | `<blog-post-cabecalho>` | titulo e datas do post (publicacao e `atualizado`), lidos do `data-slug` |
 
 ## Personalizacao
