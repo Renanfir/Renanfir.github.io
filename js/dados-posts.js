@@ -31,6 +31,24 @@ window.CONFIGURACAO_BLOG = {
 
 window.POSTS = [
   {
+    slug: "where-good-ideas-come-from",
+    titulo: "Where Good Ideas Come From",
+    data: "2026-11-09",
+    secao: "Books"
+  },
+  {
+    slug: "the-product-minded-engineer",
+    titulo: "The Product-Minded Engineer",
+    data: "2026-11-09",
+    secao: "Books"
+  },
+  {
+    slug: "systems-performance",
+    titulo: "Systems Performance: Enterprise and the Cloud",
+    data: "2026-11-09",
+    secao: "Books"
+  },
+  {
     slug: "iot-coffee-scale",
     titulo: "IoT coffee scale: ESP8266 + HX711 + Loki + Grafana",
     data: "2026-11-02",

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Carregando...</title>
+  <link rel="stylesheet" href="../css/estilos.css">
+</head>
+<body data-raiz="../" data-slug="where-good-ideas-come-from">
+
+  <div class="layout">
+
+    <blog-barra-lateral></blog-barra-lateral>
+
+    <div class="conteudo">
+      <article class="painel">
+        <blog-post-cabecalho></blog-post-cabecalho>
+
+        <!-- ====================================================================
+             CAPITULOS
+             Cada capitulo entra no lugar do paragrafo abaixo, no mesmo formato
+             dos outros livros (do <h2> ate o <hr>):
+               <h2>Chapter 1 &mdash; Titulo</h2>
+               <p class="capitulo__data">Posted on <time datetime="AAAA-MM-DD">AAAA-MM-DD</time></p>
+               ...conteudo...
+               <hr>
+             A data do capitulo mais recente tem que bater com o campo
+             "atualizado" em dados-posts.js.
+             ==================================================================== -->
+        <p>Notes on this book will be posted here, one chapter at a time.</p>
+
+        <hr>
+        <p class="post__voltar"><a href="../index.html">Back to the list</a></p>
+      </article>
+    </div>
+  </div>
+
+  <script src="../js/dados-posts.js"></script>
+  <script src="../js/componentes.js"></script>
+</body>
+</html>
