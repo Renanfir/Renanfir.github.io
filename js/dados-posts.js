@@ -46,6 +46,7 @@ window.POSTS = [
     slug: "systems-performance",
     titulo: "Systems Performance: Enterprise and the Cloud",
     data: "2026-11-09",
+    atualizado: "2026-11-10",
     secao: "Books"
   },
   {

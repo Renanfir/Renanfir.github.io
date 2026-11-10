@@ -17,17 +17,156 @@
         <blog-post-cabecalho></blog-post-cabecalho>
 
         <!-- ====================================================================
-             CAPITULOS
-             Cada capitulo entra no lugar do paragrafo abaixo, no mesmo formato
-             dos outros livros (do <h2> ate o <hr>):
-               <h2>Chapter 1 &mdash; Titulo</h2>
-               <p class="capitulo__data">Posted on <time datetime="AAAA-MM-DD">AAAA-MM-DD</time></p>
-               ...conteudo...
-               <hr>
-             A data do capitulo mais recente tem que bater com o campo
-             "atualizado" em dados-posts.js.
+             CAPITULO 1
+             Para o proximo capitulo, copie o bloco abaixo (do <h2> ate o <hr>)
+             e troque o numero, a data e o conteudo. A data do capitulo mais
+             recente tem que bater com o campo "atualizado" em dados-posts.js.
              ==================================================================== -->
-        <p>Notes on this book will be posted here, one chapter at a time.</p>
+        <h2>Chapter 1 &mdash; Introduction</h2>
+        <p class="capitulo__data">Posted on <time datetime="2026-11-10">2026-11-10</time></p>
+
+        <h3>The system software stack</h3>
+        <p>
+          <img src="../imagens/systems-performance/generic-system-software-stack.png"
+               alt="Generic system software stack: application, database, compilers and system libraries at user level; system calls on the boundary; the kernel (thread scheduler, file systems, network stack, virtual memory and device drivers) at kernel level; and the devices below it">
+        </p>
+        <p class="texto-suave">Generic system software stack, from the book.</p>
+
+        <p>
+          Here, the dashed line separates the <strong>user level</strong> (application, database,
+          compilers, libraries) from the <strong>kernel level</strong>, where the kernel manages
+          the hardware, memory and CPU.
+        </p>
+        <p>
+          And the <strong>system calls</strong> in the middle are the user level's phone line to
+          the kernel level, used to ask it for work (read a file, create a thread, etc.).
+        </p>
+
+        <h3>Inside the kernel</h3>
+        <div class="tabela-rolagem">
+          <table class="tabela">
+            <thead>
+              <tr>
+                <th>Component</th>
+                <th>What it does</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Thread Scheduler</strong></td>
+                <td>decides which thread uses each CPU core and for how long</td>
+              </tr>
+              <tr>
+                <td><strong>File Systems</strong></td>
+                <td>turn &quot;file <code>C:\x.txt</code>&quot; into blocks on the disk (NTFS, ext4)</td>
+              </tr>
+              <tr>
+                <td><strong>Network Stack</strong></td>
+                <td>implements TCP/IP: sockets, connections and packets</td>
+              </tr>
+              <tr>
+                <td><strong>Virtual Memory</strong></td>
+                <td>
+                  gives each process its own isolated memory space and maps that space to the
+                  physical RAM (or to the disk, when paging)
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Device Drivers</strong></td>
+                <td>
+                  translate generic commands into the specific hardware (that particular SSD or
+                  network card model)
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Following a file read through the stack</h3>
+        <div class="tabela-rolagem">
+          <table class="tabela">
+            <thead>
+              <tr>
+                <th>Step</th>
+                <th>Layer</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>1. Your code calls the .NET API</td>
+                <td>Application</td>
+              </tr>
+              <tr>
+                <td>2. The runtime calls the OS library (<code>ReadFile</code> on Windows)</td>
+                <td>System Libraries</td>
+              </tr>
+              <tr>
+                <td>3. The library makes the system call</td>
+                <td>System Calls</td>
+              </tr>
+              <tr>
+                <td>4. The kernel locates the file</td>
+                <td>File Systems</td>
+              </tr>
+              <tr>
+                <td>5. The driver tells the SSD to read the blocks</td>
+                <td>Device Drivers &rarr; Devices</td>
+              </tr>
+              <tr>
+                <td>6. While it waits for the disk, the thread is free for other work</td>
+                <td>Thread Scheduler</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Activities of a performance engineer</h3>
+        <ol>
+          <li>
+            <strong>Setting objectives and performance modeling:</strong> establishing
+            performance goals for a future product and estimating how it should perform.
+          </li>
+          <li>
+            <strong>Performance characterization of prototypes:</strong> measuring and
+            evaluating the performance of early versions of software and hardware.
+          </li>
+          <li>
+            <strong>Performance analysis during development:</strong> testing the performance of
+            products under development in a controlled environment.
+          </li>
+          <li>
+            <strong>Non-regression testing:</strong> checking that new versions have not made
+            performance worse compared with previous versions.
+          </li>
+          <li>
+            <strong>Release benchmarking:</strong> comparing the performance of different
+            versions of the product using standardized tests.
+          </li>
+          <li>
+            <strong>Proof-of-concept testing in production:</strong> validating that a solution
+            works properly in the real environment where it will be used.
+          </li>
+          <li>
+            <strong>Performance tuning in production:</strong> improving the performance of the
+            system that is already running in production.
+          </li>
+          <li>
+            <strong>Monitoring software in production:</strong> continuously tracking the
+            operation, resource usage and performance of the system.
+          </li>
+          <li>
+            <strong>Analysis of performance issues in production:</strong> investigating
+            problems such as slowness, high memory usage or excessive processing.
+          </li>
+          <li>
+            <strong>Production incident reviews:</strong> analyzing problems that happened,
+            identifying their causes and defining how to prevent them from happening again.
+          </li>
+          <li>
+            <strong>Performance tool development:</strong> creating tools that make it easier to
+            analyze, diagnose and monitor the performance of systems.
+          </li>
+        </ol>
 
         <hr>
         <p class="post__voltar"><a href="../index.html">Back to the list</a></p>
